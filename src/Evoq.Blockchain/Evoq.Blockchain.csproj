@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <Version>1.0.1</Version>
+    <Authors>Luke Puplett</Authors>
+    <Company>Evoq</Company>
+    <Description>Blockchain utilities for .NET applications</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/lukepuplett/evoq-blockchain</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/lukepuplett/evoq-blockchain</RepositoryUrl>
+    <PackageTags>blockchain;ethereum;web3</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>
