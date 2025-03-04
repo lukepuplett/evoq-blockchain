@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Evoq.Blockchain;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -247,4 +248,202 @@ public class HexTests
         Hex hex = Hex.Parse(input);
         Assert.ThrowsException<ArgumentException>(() => hex.ToPadded(length));
     }
+
+    [TestMethod]
+    [DataRow("0x1234", 2, "0x1234")]       // No padding needed (already 2 bytes)
+    [DataRow("0x1234", 4, "0x00001234")]   // Pad to 4 bytes
+    [DataRow("0x0", 1, "0x0")]            // Pad single zero to 1 byte
+    [DataRow("0x", 2, "0x0000")]           // Pad empty hex to 2 bytes
+    [DataRow("0x1234", 8, "0x0000000000001234")] // Pad to 8 bytes
+    public void ToPaddedHex_PadsToCorrectByteLength(string input, int byteLength, string expected)
+    {
+        Hex hex = Hex.Parse(input);
+        Hex padded = hex.ToPaddedHex(byteLength);
+
+        Assert.AreEqual(expected, padded.ToString());
+        Assert.AreEqual(byteLength, padded.Length);
+    }
+
+    [TestMethod]
+    public void ToPaddedHex_NegativeLength_ThrowsArgumentOutOfRangeException()
+    {
+        Hex hex = Hex.Parse("0x1234");
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => hex.ToPaddedHex(-1));
+    }
+
+    [TestMethod]
+    public void ToPaddedHex_ZeroLength_ReturnsEmptyHex()
+    {
+        Hex hex = Hex.Parse("0x1234");
+        Hex padded = hex.ToPaddedHex(0);
+
+        Assert.AreEqual(Hex.Empty, padded);
+        Assert.AreEqual("0x", padded.ToString());
+    }
+
+    [TestMethod]
+    public void ToPaddedHex_SameLength_ReturnsCopy()
+    {
+        Hex original = Hex.Parse("0x1234");
+        Hex padded = original.ToPaddedHex(2); // 0x1234 is already 2 bytes
+
+        Assert.AreEqual(original, padded);
+        Assert.AreNotSame(original, padded); // Should be a new instance
+    }
+
+    [TestMethod]
+    [DataRow("0x1234", 4, "0x00001234")]   // Pad to 4 bytes
+    [DataRow("0x0", 2, "0x0000")]          // Pad single zero to 2 bytes
+    [DataRow("0x", 3, "0x000000")]         // Pad empty hex to 3 bytes
+    public void CreatePadded_FromString_CreatesCorrectlyPaddedHex(string input, int byteLength, string expected)
+    {
+        Hex padded = Hex.CreatePadded(input, byteLength);
+
+        Assert.AreEqual(expected, padded.ToString());
+        Assert.AreEqual(byteLength, padded.Length);
+    }
+
+    [TestMethod]
+    [DataRow("0x1234", 4, "0x00001234")]   // Pad to 4 bytes
+    [DataRow("0x0", 2, "0x0000")]          // Pad single zero to 2 bytes
+    [DataRow("0x", 3, "0x000000")]         // Pad empty hex to 3 bytes
+    public void CreatePadded_FromHex_CreatesCorrectlyPaddedHex(string input, int byteLength, string expected)
+    {
+        Hex original = Hex.Parse(input);
+        Hex padded = Hex.CreatePadded(original, byteLength);
+
+        Assert.AreEqual(expected, padded.ToString());
+        Assert.AreEqual(byteLength, padded.Length);
+    }
+
+    [TestMethod]
+    public void CreatePadded_NullString_ThrowsArgumentNullException()
+    {
+        Assert.ThrowsException<ArgumentNullException>(() => Hex.CreatePadded(null, 4));
+    }
+
+    #region BigInteger Tests
+
+    [TestMethod]
+    [DataRow("0x00", 0)]
+    [DataRow("0x01", 1)]
+    [DataRow("0x0A", 10)]
+    [DataRow("0x10", 16)]
+    [DataRow("0xFF", 255)]
+    public void ToBigInteger_BasicValues_ConvertsCorrectly(string hexString, long expected)
+    {
+        Hex hex = Hex.Parse(hexString);
+        BigInteger result = hex.ToBigInteger();
+        Assert.AreEqual(new BigInteger(expected), result);
+    }
+
+    [TestMethod]
+    public void ToBigInteger_EndiannessDifference_HandlesCorrectly()
+    {
+        // 0x1234 in big-endian is 4660 decimal (0x1234)
+        // 0x1234 in little-endian is 13330 decimal (0x3412)
+        Hex hex = Hex.Parse("0x1234");
+
+        BigInteger bigEndianResult = hex.ToBigInteger(HexSignedness.Unsigned, HexEndianness.BigEndian);
+        BigInteger littleEndianResult = hex.ToBigInteger(HexSignedness.Unsigned, HexEndianness.LittleEndian);
+
+        Assert.AreEqual(new BigInteger(4660), bigEndianResult);
+        Assert.AreEqual(new BigInteger(13330), littleEndianResult);
+    }
+
+    [TestMethod]
+    public void ToBigInteger_SignBitHandling_WorksCorrectly()
+    {
+        // 0x80 has the high bit set
+        // As unsigned: 128
+        // As signed: -128
+        Hex hex = Hex.Parse("0x80");
+
+        BigInteger unsignedResult = hex.ToBigInteger(HexSignedness.Unsigned, HexEndianness.BigEndian);
+        BigInteger signedResult = hex.ToBigInteger(HexSignedness.Signed, HexEndianness.BigEndian);
+
+        Assert.AreEqual(new BigInteger(128), unsignedResult);
+        Assert.AreEqual(new BigInteger(-128), signedResult);
+    }
+
+    [TestMethod]
+    public void ToBigInteger_EmptyHex_ReturnsZero()
+    {
+        Hex hex = Hex.Parse("0x");
+        BigInteger result = hex.ToBigInteger();
+        Assert.AreEqual(BigInteger.Zero, result);
+    }
+
+    [TestMethod]
+    public void ToBigInteger_Zero_ReturnsZero()
+    {
+        Hex hex = Hex.Parse("0x0");
+        BigInteger result = hex.ToBigInteger();
+        Assert.AreEqual(BigInteger.Zero, result);
+    }
+
+    [TestMethod]
+    public void ToBigInteger_LargeValue_ConvertsCorrectly()
+    {
+        // A large hex value that exceeds standard integer types
+        Hex hex = Hex.Parse("0x1234567890ABCDEF1234567890ABCDEF");
+        BigInteger result = hex.ToBigInteger();
+
+        // Calculate expected value
+        BigInteger expected = BigInteger.Parse("1234567890ABCDEF1234567890ABCDEF",
+                                              System.Globalization.NumberStyles.HexNumber);
+
+        Assert.AreEqual(expected, result);
+    }
+
+    [TestMethod]
+    [DataRow("0x00")]
+    [DataRow("0x01")]
+    [DataRow("0xFF")]
+    [DataRow("0x1234")]
+    [DataRow("0x1234567890ABCDEF")]
+    public void ToBigInteger_RoundTrip_PreservesValue(string hexString)
+    {
+        Hex original = Hex.Parse(hexString);
+        BigInteger bigInt = original.ToBigInteger();
+        Hex roundTrip = Hex.FromBigInteger(bigInt);
+
+        Assert.IsTrue(original.ValueEquals(roundTrip),
+            $"Round trip failed: Original: {original}, Result: {roundTrip}");
+    }
+
+    [TestMethod]
+    public void FromBigInteger_Zero_ReturnsZeroHex()
+    {
+        BigInteger zero = BigInteger.Zero;
+        Hex result = Hex.FromBigInteger(zero);
+
+        Assert.AreEqual(Hex.Zero, result);
+        Assert.AreEqual("0x0", result.ToString());
+    }
+
+    [TestMethod]
+    public void FromBigInteger_NegativeValue_PreservesValue()
+    {
+        BigInteger negative = new BigInteger(-128);
+        Hex result = Hex.FromBigInteger(negative);
+
+        // Converting back should give us the same value
+        BigInteger roundTrip = result.ToBigInteger(HexSignedness.Signed, HexEndianness.BigEndian);
+        Assert.AreEqual(negative, roundTrip);
+    }
+
+    [TestMethod]
+    public void FromBigInteger_EndiannessDifference_HandlesCorrectly()
+    {
+        BigInteger value = new BigInteger(4660); // Decimal for 0x1234
+
+        Hex bigEndianResult = Hex.FromBigInteger(value, HexEndianness.BigEndian);
+        Hex littleEndianResult = Hex.FromBigInteger(value, HexEndianness.LittleEndian);
+
+        Assert.AreEqual("0x1234", bigEndianResult.ToString());
+        Assert.AreEqual("0x3412", littleEndianResult.ToString());
+    }
+
+    #endregion
 }
