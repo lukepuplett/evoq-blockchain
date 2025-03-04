@@ -37,6 +37,42 @@ dotnet build
 dotnet test
 ```
 
+The repository includes shell scripts to simplify the build and publishing process:
+
+### build.sh
+
+This script automates the build process:
+- Cleans previous artifacts
+- Builds the project in Release configuration
+- Runs all tests
+- Creates a NuGet package in the ./artifacts directory
+
+```bash
+# Make the script executable
+chmod +x build.sh
+
+# Run the build script
+./build.sh
+```
+
+### publish.sh
+
+This script publishes the NuGet package to NuGet.org:
+- Requires the NUGET_API_KEY environment variable to be set
+- Finds the .nupkg file in the artifacts directory
+- Pushes the package to NuGet.org
+
+```bash
+# Make the script executable
+chmod +x publish.sh
+
+# Set your NuGet API key
+export NUGET_API_KEY="your-nuget-api-key"
+
+# Run the publish script
+./publish.sh
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
