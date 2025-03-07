@@ -1,7 +1,6 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
-using Evoq.Blockchain;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Evoq.Blockchain.Tests;
 
@@ -443,6 +442,169 @@ public class HexTests
 
         Assert.AreEqual("0x1234", bigEndianResult.ToString());
         Assert.AreEqual("0x3412", littleEndianResult.ToString());
+    }
+
+    #endregion
+
+    #region Default Initialization Tests
+
+    [TestMethod]
+    public void Default_Initialization_HasNullValue()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+
+        // Act & Assert
+        Assert.AreEqual(0, defaultHex.Length, "Default Hex should have Length 0");
+        Assert.AreEqual("0x", defaultHex.ToString(), "Default Hex should stringify to 0x");
+        CollectionAssert.AreEqual(Array.Empty<byte>(), defaultHex.ToByteArray(), "Default Hex should return empty byte array");
+    }
+
+    [TestMethod]
+    public void Default_Equals_EmptyHex_ReturnsTrue()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+        var emptyHex = Hex.Empty;
+
+        // Act & Assert
+        Assert.IsTrue(defaultHex.Equals(emptyHex), "default(Hex) should equal Hex.Empty");
+        Assert.IsTrue(emptyHex.Equals(defaultHex), "Hex.Empty should equal default(Hex)");
+        Assert.IsTrue(defaultHex == emptyHex, "default(Hex) == Hex.Empty should be true");
+        Assert.IsTrue(emptyHex == defaultHex, "Hex.Empty == default(Hex) should be true");
+    }
+
+    [TestMethod]
+    public void Default_IsZeroValue_ReturnsTrue()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+
+        // Act & Assert
+        Assert.IsFalse(defaultHex.IsZeroValue(), "default(Hex) should be considered a zero value");
+    }
+
+    [TestMethod]
+    public void Default_IsEmpty_ReturnsTrue()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+
+        // Act & Assert
+        Assert.IsTrue(defaultHex.IsEmpty(), "default(Hex) should be considered empty");
+    }
+
+    [TestMethod]
+    public void Default_ToBigInteger_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+
+        // Act & Assert
+        var ex = Assert.ThrowsException<InvalidOperationException>(
+            () => defaultHex.ToBigInteger(),
+            "default(Hex).ToBigInteger() should throw InvalidOperationException");
+
+        Assert.AreEqual("Cannot convert a default-initialized, empty Hex value to BigInteger", ex.Message);
+    }
+
+    [TestMethod]
+    public void Default_ToPadded_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+
+        // Act & Assert
+        Assert.ThrowsException<ArgumentNullException>(
+            () => defaultHex.ToPadded(4),
+            "default(Hex).ToPadded() should throw ArgumentNullException");
+    }
+
+    [TestMethod]
+    public void Default_ToPaddedHex_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+
+        // Act & Assert
+        var ex = Assert.ThrowsException<InvalidOperationException>(
+            () => defaultHex.ToPaddedHex(2),
+            "default(Hex).ToPaddedHex() should throw InvalidOperationException");
+
+        Assert.AreEqual("Cannot pad a default-initialized, empty Hex value", ex.Message);
+    }
+
+    [TestMethod]
+    public void Default_ValueEquals_EmptyAndZero_ReturnsTrue()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+        var emptyHex = Hex.Empty;
+        var zeroHex = Hex.Zero;
+
+        // Act & Assert
+        Assert.IsTrue(defaultHex.ValueEquals(emptyHex), "default(Hex) should value-equal Hex.Empty");
+        Assert.IsTrue(defaultHex.ValueEquals(zeroHex), "default(Hex) should value-equal Hex.Zero");
+        Assert.IsTrue(emptyHex.ValueEquals(defaultHex), "Hex.Empty should value-equal default(Hex)");
+        Assert.IsTrue(zeroHex.ValueEquals(defaultHex), "Hex.Zero should value-equal default(Hex)");
+    }
+
+    [TestMethod]
+    public void Default_ComparisonWithNonZero_WorksCorrectly()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+        var nonZeroHex = Hex.Parse("0x1234");
+
+        // Act & Assert
+        Assert.IsFalse(defaultHex.Equals(nonZeroHex), "default(Hex) should not equal non-zero Hex");
+        Assert.IsFalse(nonZeroHex.Equals(defaultHex), "Non-zero Hex should not equal default(Hex)");
+        Assert.IsFalse(defaultHex == nonZeroHex, "default(Hex) == non-zero Hex should be false");
+        Assert.IsFalse(nonZeroHex == defaultHex, "Non-zero Hex == default(Hex) should be false");
+        Assert.IsTrue(defaultHex != nonZeroHex, "default(Hex) != non-zero Hex should be true");
+        Assert.IsTrue(nonZeroHex != defaultHex, "Non-zero Hex != default(Hex) should be true");
+    }
+
+    [TestMethod]
+    public void Default_SafeOperations_DoNotThrow()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+
+        // Act & Assert - these should not throw
+        var length = defaultHex.Length;
+        var toString = defaultHex.ToString();
+        var byteArray = defaultHex.ToByteArray();
+        var equalsEmpty = defaultHex.Equals(Hex.Empty);
+        var isEmpty = defaultHex.IsEmpty();
+
+        // Additional assertions
+        Assert.AreEqual(0, length);
+        Assert.AreEqual("0x", toString);
+        CollectionAssert.AreEqual(Array.Empty<byte>(), byteArray);
+        Assert.IsTrue(equalsEmpty);
+        Assert.IsTrue(isEmpty);
+    }
+
+    [TestMethod]
+    public void Default_InCollections_WorksCorrectly()
+    {
+        // Arrange
+        var defaultHex = default(Hex);
+        var list = new List<Hex> { defaultHex, Hex.Zero, Hex.Parse("0x1234") };
+        var dict = new Dictionary<Hex, string>
+        {
+            { defaultHex, "default" },
+            { Hex.Zero, "zero" },
+            { Hex.Parse("0x1234"), "non-zero" }
+        };
+
+        // Act & Assert
+        Assert.AreEqual(3, list.Count, "List should contain 3 items");
+        Assert.AreEqual(3, dict.Count, "Dictionary should contain 3 items");
+        Assert.IsTrue(list.Contains(defaultHex), "List should contain default(Hex)");
+        Assert.IsTrue(dict.ContainsKey(defaultHex), "Dictionary should contain default(Hex) as key");
+        Assert.AreEqual("default", dict[defaultHex], "Dictionary should return correct value for default(Hex)");
     }
 
     #endregion

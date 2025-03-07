@@ -65,7 +65,7 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
 
     //
 
-    private readonly byte[] _value = Array.Empty<byte>();
+    private readonly byte[]? value = Array.Empty<byte>(); // possible null when default(Hex), amazing but true
 
     //
 
@@ -76,7 +76,14 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// <exception cref="ArgumentNullException">Thrown if the input byte array is null.</exception>
     public Hex(byte[] value)
     {
-        _value = value ?? throw new ArgumentNullException(nameof(value));
+        // tolerate empty arrays
+
+        if (value == null)
+        {
+            throw new ArgumentNullException(nameof(value));
+        }
+
+        this.value = value;
     }
 
     //
@@ -84,7 +91,7 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// <summary>
     /// Gets the length of the hex string.
     /// </summary>
-    public int Length => _value.Length;
+    public int Length => value?.Length ?? 0;
 
     //
 
@@ -97,8 +104,12 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// <exception cref="FormatException">Thrown if the input string is not a valid hex string.</exception>
     public static Hex Parse(string hex)
     {
+        // handle null or empty strings
+
         if (string.IsNullOrEmpty(hex))
+        {
             throw new ArgumentNullException(nameof(hex));
+        }
 
         // Remove 0x prefix if present
         string normalized = hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
@@ -107,19 +118,27 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
 
         // Special case - if after removing 0x we have empty string, return Empty
         if (normalized == string.Empty)
+        {
             return Empty;
+        }
 
         // Special case - if single '0', return Zero
         if (normalized == "0")
+        {
             return Zero;
+        }
 
         // Check for odd length (invalid hex)
         if (normalized.Length % 2 != 0)
+        {
             throw new FormatException("Hex string must have an even number of characters");
+        }
 
         // Check for invalid hex characters
         if (!normalized.All(c => Uri.IsHexDigit(c)))
+        {
             throw new FormatException("Invalid hex character in string");
+        }
 
         byte[] bytes = new byte[normalized.Length / 2];
         for (int i = 0; i < bytes.Length; i++)
@@ -140,20 +159,29 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// <summary>
     /// Returns a copy of the underlying byte array.
     /// </summary>
-    /// <returns></returns>
-    public byte[] ToByteArray() => _value.ToArray();
+    /// <returns>A copy of the underlying byte array.</returns>
+    public byte[] ToByteArray() => value == null ? Array.Empty<byte>() : value.ToArray();
 
     /// <summary>
-    /// Returns a string representation of the <see cref="Hex"/> struct.
+    /// Returns a string representation of the <see cref="Hex"/> struct where '0x' indicates an empty value.
     /// </summary>
     /// <returns>A string representation of the <see cref="Hex"/> struct.</returns>
     public override string ToString()
     {
-        // Special case: if we have a single zero byte, return "0x0"
-        if (_value.Length == 1 && _value[0] == 0)
-            return "0x0";
+        // handle default(Hex)
 
-        return "0x" + BitConverter.ToString(_value).Replace("-", "").ToLowerInvariant();
+        if (value == null)
+        {
+            return "0x";
+        }
+
+        // Special case: if we have a single zero byte, return "0x0"
+        if (value.Length == 1 && value[0] == 0)
+        {
+            return "0x0";
+        }
+
+        return "0x" + BitConverter.ToString(value).Replace("-", "").ToLowerInvariant();
     }
 
     /// <summary>
@@ -163,12 +191,38 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// <returns>True if the two instances are equal, false otherwise.</returns>
     public bool Equals(Hex other)
     {
+        /*
+        
+        When you compare a struct with default using the == operator, it calls the overloaded
+        equality operator, which in turn calls the Equals method. In the Hex struct, the
+        Equals method is trying to access other._value, but when other is default(Hex), the
+        field initializer private readonly byte[] _value = Array.Empty<byte>() hasn't run yet,
+        so other._value is null.
+        
+        */
+
+        // Handle case where other._value might be null (when other is default(Hex))
+        if (other.value == null)
+        {
+            // If this._value is null or empty, they're equal
+            return this.value == null || this.value.Length == 0;
+        }
+
+        // Handle case where this._value might be null (shouldn't happen with field initializer)
+        if (this.value == null)
+        {
+            // If other._value is empty, they're equal
+            return other.value.Length == 0;
+        }
+
         // Compare lengths first
-        if (_value.Length != other._value.Length)
+        if (this.value.Length != other.value.Length)
+        {
             return false;
+        }
 
         // Then compare the actual bytes
-        return _value.AsSpan().SequenceEqual(other._value);
+        return this.value.AsSpan().SequenceEqual(other.value);
     }
 
     /// <summary>
@@ -210,7 +264,29 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// </summary>
     public bool IsZeroValue()
     {
-        return _value.All(b => b == 0);
+        // handle default(Hex)
+
+        if (value == null)
+        {
+            return false;
+        }
+
+        return value.All(b => b == 0);
+    }
+
+    /// <summary>
+    /// Returns true if this <see cref="Hex"/> instance is empty.
+    /// </summary>
+    public bool IsEmpty()
+    {
+        // handle default(Hex)
+
+        if (value == null)
+        {
+            return true;
+        }
+
+        return value.Length == 0;
     }
 
     /// <summary>
@@ -219,12 +295,14 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     public bool ValueEquals(Hex other)
     {
         // If both are zero, they're equal regardless of length
-        if (IsZeroValue() && other.IsZeroValue())
+        if (this.IsZeroValue() && other.IsZeroValue())
+        {
             return true;
+        }
 
         // Find first non-zero byte in each
-        ReadOnlySpan<byte> thisSpan = _value;
-        ReadOnlySpan<byte> otherSpan = other._value;
+        ReadOnlySpan<byte> thisSpan = value;
+        ReadOnlySpan<byte> otherSpan = other.value;
 
         while (thisSpan.Length > 0 && thisSpan[0] == 0)
         {
@@ -238,13 +316,17 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
 
         // Different lengths after trimming zeros means different values
         if (thisSpan.Length != otherSpan.Length)
+        {
             return false;
+        }
 
         // Compare byte by byte
         for (int i = 0; i < thisSpan.Length; i++)
         {
             if (thisSpan[i] != otherSpan[i])
+            {
                 return false;
+            }
         }
 
         return true;
@@ -259,7 +341,7 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     public string ToPadded(int length)
     {
         // Get current hex string without prefix
-        string current = BitConverter.ToString(_value).Replace("-", "").ToLowerInvariant();
+        string current = BitConverter.ToString(value).Replace("-", "").ToLowerInvariant();
 
         // Check if padding is possible
         if (current.Length > length)
@@ -279,21 +361,32 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     public Hex ToPaddedHex(int byteLength)
     {
         if (byteLength < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(byteLength), "Byte length cannot be negative");
+        }
+
+        if (value == null)
+        {
+            throw new InvalidOperationException("Cannot pad a default-initialized, empty Hex value");
+        }
 
         // Handle special case for zero length
         if (byteLength == 0)
+        {
             return Hex.Empty;
+        }
 
         // If current length is already equal to or greater than the requested length, return a copy
-        if (_value.Length >= byteLength)
-            return new Hex(_value);
+        if (value.Length >= byteLength)
+        {
+            return new Hex(value);
+        }
 
         // Create a new byte array with the desired length
         byte[] paddedBytes = new byte[byteLength];
 
         // Copy the existing bytes to the end of the new array (to pad with leading zeros)
-        Array.Copy(_value, 0, paddedBytes, byteLength - _value.Length, _value.Length);
+        Array.Copy(value, 0, paddedBytes, byteLength - value.Length, value.Length);
 
         // Return a new Hex instance with the padded bytes
         return new Hex(paddedBytes);
@@ -344,12 +437,21 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// </remarks>
     public BigInteger ToBigInteger(HexSignedness signedness, HexEndianness endianness)
     {
+        // handle default(Hex)
+
+        if (value == null)
+        {
+            throw new InvalidOperationException("Cannot convert a default-initialized, empty Hex value to BigInteger");
+        }
+
         // Handle empty or zero cases
-        if (_value.Length == 0 || IsZeroValue())
+        if (value.Length == 0 || IsZeroValue())
+        {
             return BigInteger.Zero;
+        }
 
         // Create a copy of the byte array to work with
-        byte[] bytes = _value.ToArray();
+        byte[] bytes = value.ToArray();
 
         // Handle endianness - BigInteger constructor expects little-endian
         if (endianness == HexEndianness.BigEndian)
@@ -410,7 +512,9 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     {
         // Handle zero case
         if (value == BigInteger.Zero)
+        {
             return Zero;
+        }
 
         // Convert to byte array (BigInteger.ToByteArray() returns little-endian)
         byte[] bytes = value.ToByteArray();
