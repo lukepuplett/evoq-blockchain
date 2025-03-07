@@ -65,7 +65,7 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
 
     //
 
-    private readonly byte[] _value;
+    private readonly byte[] _value = Array.Empty<byte>();
 
     //
 
