@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 namespace Evoq.Blockchain.Tests;
@@ -608,4 +609,192 @@ public class HexTests
     }
 
     #endregion
+
+    #region Endianness Tests
+
+    [TestMethod]
+    [Description("Tests that BigInteger byte arrays need endianness conversion for Ethereum")]
+    public void ToHexStruct_BigIntegerEndianness_RequiresConversion()
+    {
+        // A simple value: 5,000,000 (block number example)
+        BigInteger value = new BigInteger(5000000);
+        byte[] bigIntBytes = value.ToByteArray(); // Little-endian by default in .NET
+
+        // Without endianness conversion - incorrect for Ethereum
+        Hex incorrectHex = bigIntBytes.ToHexStruct();
+        // With endianness conversion - correct for Ethereum (big-endian)
+        Hex correctHex = bigIntBytes.ToHexStruct(reverseEndianness: true, trimLeadingZeros: true);
+
+        // The correct Ethereum representation of 5,000,000 is 0x4c4b40
+        Assert.AreEqual("0x4c4b40", correctHex.ToString().ToLowerInvariant());
+        Assert.AreNotEqual("0x4c4b40", incorrectHex.ToString().ToLowerInvariant());
+    }
+
+    [TestMethod]
+    [Description("Tests converting standard Ethereum gas limit with BigInteger")]
+    public void ToHexStruct_EthereumGasLimit_CorrectWithEndianConversion()
+    {
+        // Standard Ethereum transaction gas limit: 21,000
+        BigInteger gasLimit = new BigInteger(21000);
+        byte[] gasLimitBytes = gasLimit.ToByteArray();
+
+        // Convert with endianness correction and trim leading zeros
+        Hex gasLimitHex = gasLimitBytes.ToHexStruct(reverseEndianness: true, trimLeadingZeros: true);
+
+        // Expected Ethereum hex representation
+        Assert.AreEqual("0x5208", gasLimitHex.ToString().ToLowerInvariant());
+    }
+
+    [TestMethod]
+    [Description("Tests converting Ethereum gas price (Gwei) with BigInteger")]
+    public void ToHexStruct_EthereumGasPrice_CorrectWithEndianConversion()
+    {
+        // 10 Gwei = 10,000,000,000 wei
+        BigInteger gasPrice = new BigInteger(10000000000);
+        byte[] gasPriceBytes = gasPrice.ToByteArray();
+
+        // Convert with endianness correction and trim leading zeros
+        Hex gasPriceHex = gasPriceBytes.ToHexStruct(reverseEndianness: true, trimLeadingZeros: true);
+
+        // Expected Ethereum hex representation
+        Assert.AreEqual("0x2540be400", gasPriceHex.ToString(true));
+    }
+
+    [TestMethod]
+    [Description("Tests converting a large Ethereum value (1 ETH in wei) with BigInteger")]
+    public void ToHexStruct_OneEtherInWei_CorrectWithEndianConversion()
+    {
+        // 1 ETH = 10^18 wei
+        BigInteger oneEther = new BigInteger(1000000000000000000);
+        byte[] etherBytes = oneEther.ToByteArray();
+
+        // Convert with endianness correction and trim leading zeros
+        Hex etherHex = etherBytes.ToHexStruct(reverseEndianness: true, trimLeadingZeros: true);
+
+        // Expected Ethereum hex representation
+        Assert.AreEqual("0xde0b6b3a7640000", etherHex.ToString(true));
+    }
+
+    [TestMethod]
+    [Description("Tests that max 256-bit integer is correctly represented")]
+    public void ToHexStruct_Max256BitInteger_CorrectWithEndianConversion()
+    {
+        // Max value for 256-bit integer
+        BigInteger maxValue = BigInteger.Parse("115792089237316195423570985008687907853269984665640564039457584007913129639935");
+        byte[] maxValueBytes = maxValue.ToByteArray();
+
+        // Convert with endianness correction but DON'T trim zeros - we want exactly 32 bytes
+        Hex maxValueHex = maxValueBytes.ToHexStruct(reverseEndianness: true);
+
+        // Remove the sign byte to get exactly 32 bytes
+        if (maxValueHex.Length == 33)
+        {
+            byte[] bytes = maxValueHex.ToByteArray();
+            byte[] trimmed = new byte[32];
+            Array.Copy(bytes, 1, trimmed, 0, 32);
+            maxValueHex = new Hex(trimmed);
+        }
+
+        // Should be 32 bytes of 0xff
+        Assert.AreEqual(32, maxValueHex.Length);
+        Assert.AreEqual("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                        maxValueHex.ToString().ToLowerInvariant());
+    }
+
+    [TestMethod]
+    [Description("Tests that endianness conversion works with Ethereum addresses")]
+    public void ToHexStruct_EthereumAddress_CorrectWithEndianConversion()
+    {
+        // Fix the expected address to match the actual bytes
+        byte[] reversedAddressBytes = new byte[] {
+            0x95, 0x14, 0xb8, 0x4d, 0x65, 0x0f, 0x9e, 0x66,
+            0x33, 0x9f, 0xa0, 0xb9, 0xc9, 0x94, 0x3e, 0x3f,
+            0x53, 0x60, 0xeb, 0x5a
+        };
+
+        // Convert with endianness correction
+        Hex correctedAddressHex = reversedAddressBytes.ToHexStruct(reverseEndianness: true);
+
+        // Expected correct Ethereum address - fixed to match the actual bytes
+        Assert.AreEqual("0x5aeb60533f3e94c9b9a09f33669e0f654db81495",
+                        correctedAddressHex.ToString().ToLowerInvariant());
+    }
+
+    #endregion
+
+    // Add new tests for the ToString method with trimming parameter
+
+    [TestMethod]
+    [Description("Tests that ToString with trimming parameter removes leading zero digits")]
+    public void ToString_WithTrimming_RemovesLeadingZeroDigits()
+    {
+        // Arrange - ensure all hex strings have even number of digits
+        Hex hex1 = Hex.Parse("0x012345");  // Leading zero digit (6 digits)
+        Hex hex2 = Hex.Parse("0x00ABCD");  // Multiple leading zero digits (6 digits)
+        Hex hex3 = Hex.Parse("0x00");      // Single zero byte
+        Hex hex4 = Hex.Parse("0x");        // Empty
+
+        // Act & Assert
+        Assert.AreEqual("0x12345", hex1.ToString(true), "Should trim single leading zero");
+        Assert.AreEqual("0xabcd", hex2.ToString(true), "Should trim multiple leading zeros");
+        Assert.AreEqual("0x0", hex3.ToString(true), "Single zero should remain as 0x0");
+        Assert.AreEqual("0x", hex4.ToString(true), "Empty hex should remain as 0x");
+    }
+
+    [TestMethod]
+    [Description("Tests that ToString without trimming parameter preserves leading zero digits")]
+    public void ToString_WithoutTrimming_PreservesLeadingZeroDigits()
+    {
+        // Arrange - ensure all hex strings have even number of digits
+        Hex hex1 = Hex.Parse("0x012345");  // Leading zero digit (6 digits)
+        Hex hex2 = Hex.Parse("0x00ABCD");  // Multiple leading zero digits (6 digits)
+
+        // Act & Assert
+        Assert.AreEqual("0x012345", hex1.ToString(), "Should preserve leading zero without trim parameter");
+        Assert.AreEqual("0x00abcd", hex2.ToString(), "Should preserve leading zeros without trim parameter");
+    }
+
+    [TestMethod]
+    [Description("Tests that ToString with trimming works correctly with different hex values")]
+    public void ToString_Trimming_WorksWithVariousHexValues()
+    {
+        // Test cases with [input, expected with trimming] - ensure all inputs have even number of digits
+        var testCases = new[]
+        {
+            new { Input = "0x0123", Expected = "0x123" },
+            new { Input = "0x00123456", Expected = "0x123456" },
+            new { Input = "0x00012345", Expected = "0x12345" },
+            new { Input = "0x000012", Expected = "0x12" },
+            new { Input = "0x0100", Expected = "0x100" },  // Only trims leading zeros
+            new { Input = "0x0010", Expected = "0x10" },
+            new { Input = "0x1000", Expected = "0x1000" }, // No leading zeros to trim
+            new { Input = "0x0000", Expected = "0x0" }     // All zeros become 0x0
+        };
+
+        foreach (var testCase in testCases)
+        {
+            Hex hex = Hex.Parse(testCase.Input);
+            Assert.AreEqual(testCase.Expected, hex.ToString(true),
+                $"Failed for input {testCase.Input}");
+        }
+    }
+
+    [TestMethod]
+    [Description("Tests that ToString with trimming works correctly with blockchain values")]
+    public void ToString_Trimming_WorksWithBlockchainValues()
+    {
+        // Common blockchain values - all have even number of digits
+
+        // Gas price (10 Gwei)
+        Hex gasPrice = Hex.Parse("0x02540be400");
+        Assert.AreEqual("0x2540be400", gasPrice.ToString(true));
+
+        // 1 ETH in wei
+        Hex oneEther = Hex.Parse("0x0de0b6b3a7640000");
+        Assert.AreEqual("0xde0b6b3a7640000", oneEther.ToString(true));
+
+        // Block number - fixed to have even number of digits
+        Hex blockNumber = Hex.Parse("0x01000000"); // Fixed: was 0x0100000 (odd)
+        Assert.AreEqual("0x1000000", blockNumber.ToString(true));
+    }
 }

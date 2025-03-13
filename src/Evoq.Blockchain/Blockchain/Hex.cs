@@ -165,11 +165,11 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// <summary>
     /// Returns a string representation of the <see cref="Hex"/> struct where '0x' indicates an empty value.
     /// </summary>
+    /// <param name="trimLeadingZeroDigits">Whether to trim leading zero digits from the hex string (default: false).</param>
     /// <returns>A string representation of the <see cref="Hex"/> struct.</returns>
-    public override string ToString()
+    public string ToString(bool trimLeadingZeroDigits = false)
     {
         // handle default(Hex)
-
         if (value == null)
         {
             return "0x";
@@ -181,7 +181,22 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
             return "0x0";
         }
 
-        return "0x" + BitConverter.ToString(value).Replace("-", "").ToLowerInvariant();
+        string hexString = BitConverter.ToString(value).Replace("-", "").ToLowerInvariant();
+
+        // Trim leading zero digits if requested and it's safe to do so
+        if (trimLeadingZeroDigits && hexString.Length > 1 && hexString[0] == '0')
+        {
+            // Remove leading zeros but keep at least one digit
+            int startIndex = 0;
+            while (startIndex < hexString.Length - 1 && hexString[startIndex] == '0')
+            {
+                startIndex++;
+            }
+
+            hexString = hexString.Substring(startIndex);
+        }
+
+        return "0x" + hexString;
     }
 
     /// <summary>
@@ -533,6 +548,63 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
         }
 
         return new Hex(bytes);
+    }
+
+    /// <summary>
+    /// Creates a new Hex instance from a byte array.
+    /// </summary>
+    /// <param name="bytes">The byte array to convert.</param>
+    /// <param name="reverseEndianness">Whether to reverse the byte order before conversion (default: false).</param>
+    /// <param name="trimLeadingZeros">Whether to trim leading zero bytes from the result (default: false).</param>
+    /// <returns>A new Hex instance representing the byte array.</returns>
+    /// <exception cref="NotImplementedException">Thrown if the method is not implemented.</exception>
+    public static Hex FromBytes(byte[] bytes, bool reverseEndianness = false, bool trimLeadingZeros = false)
+    {
+        if (bytes == null || bytes.Length == 0)
+        {
+            return Empty;
+        }
+
+        byte[] bytesToConvert = bytes;
+
+        // Clone the array if we need to modify it
+        if (reverseEndianness || trimLeadingZeros)
+        {
+            bytesToConvert = (byte[])bytes.Clone();
+        }
+
+        // Reverse byte order if requested
+        if (reverseEndianness)
+        {
+            Array.Reverse(bytesToConvert);
+        }
+
+        // Trim leading zeros if requested
+        if (trimLeadingZeros && bytesToConvert.Length > 0)
+        {
+            int startIndex = 0;
+            while (startIndex < bytesToConvert.Length && bytesToConvert[startIndex] == 0)
+            {
+                startIndex++;
+            }
+
+            // If all bytes are zero, return Zero
+            if (startIndex == bytesToConvert.Length)
+            {
+                return Zero;
+            }
+
+            // Create a new array without the leading zeros
+            if (startIndex > 0)
+            {
+                byte[] trimmed = new byte[bytesToConvert.Length - startIndex];
+                Array.Copy(bytesToConvert, startIndex, trimmed, 0, trimmed.Length);
+                bytesToConvert = trimmed;
+            }
+        }
+
+        // Return a new Hex instance directly from the byte array
+        return new Hex(bytesToConvert);
     }
 
     /// <summary>

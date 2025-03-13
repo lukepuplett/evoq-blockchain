@@ -1,7 +1,11 @@
 using System;
+using System.Linq;
 
 namespace Evoq.Blockchain;
 
+/// <summary>
+/// Extension methods for blockchain operations.
+/// </summary>
 public static class BlockchainExtensions
 {
     /// <summary>
@@ -22,9 +26,11 @@ public static class BlockchainExtensions
     /// Converts a byte array to a Hex string.
     /// </summary>
     /// <param name="bytes">The byte array to convert</param>
+    /// <param name="reverseEndianness">Whether to reverse the byte order before conversion (default: false)</param>
+    /// <param name="trimLeadingZeros">Whether to trim leading zero bytes from the result (default: false)</param>
     /// <returns>A Hex string representation of the input byte array</returns>
-    public static Hex ToHexStruct(this byte[] bytes)
+    public static Hex ToHexStruct(this byte[] bytes, bool reverseEndianness = false, bool trimLeadingZeros = false)
     {
-        return new Hex(bytes);
+        return Hex.FromBytes(bytes, reverseEndianness, trimLeadingZeros).ToString();
     }
 }
