@@ -37,6 +37,28 @@ public enum HexEndianness
 }
 
 /// <summary>
+/// Specifies parsing options for Hex values.
+/// </summary>
+[Flags]
+public enum HexParseOptions
+{
+    /// <summary>
+    /// Use strict parsing rules, requiring even number of hex digits.
+    /// </summary>
+    Strict = 0,
+
+    /// <summary>
+    /// Automatically pad odd-length hex strings with a leading zero.
+    /// </summary>
+    AllowOddLength = 1,
+
+    // Reserved for future options
+    // Option2 = 2,
+    // Option3 = 4,
+    // etc.
+}
+
+/// <summary>
 /// A type that can be converted to a byte array.
 /// </summary>
 public interface IByteArray
@@ -99,13 +121,13 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// Parses a hex string into a <see cref="Hex"/> struct.
     /// </summary>
     /// <param name="hex">The hex string to parse.</param>
+    /// <param name="options">Parsing options to control behavior (default: Strict).</param>
     /// <returns>A <see cref="Hex"/> struct representing the parsed hex string.</returns>
     /// <exception cref="ArgumentNullException">Thrown if the input string is null or empty.</exception>
     /// <exception cref="FormatException">Thrown if the input string is not a valid hex string.</exception>
-    public static Hex Parse(string hex)
+    public static Hex Parse(string hex, HexParseOptions options = HexParseOptions.Strict)
     {
         // handle null or empty strings
-
         if (string.IsNullOrEmpty(hex))
         {
             throw new ArgumentNullException(nameof(hex));
@@ -128,10 +150,18 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
             return Zero;
         }
 
-        // Check for odd length (invalid hex)
+        // Handle odd length based on options
         if (normalized.Length % 2 != 0)
         {
-            throw new FormatException("Hex string must have an even number of characters");
+            if ((options & HexParseOptions.AllowOddLength) != 0)
+            {
+                // Pad with a leading zero
+                normalized = "0" + normalized;
+            }
+            else
+            {
+                throw new FormatException("Hex string must have an even number of characters");
+            }
         }
 
         // Check for invalid hex characters

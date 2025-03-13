@@ -797,4 +797,139 @@ public class HexTests
         Hex blockNumber = Hex.Parse("0x01000000"); // Fixed: was 0x0100000 (odd)
         Assert.AreEqual("0x1000000", blockNumber.ToString(true));
     }
+
+    #region Parse Options Tests
+
+    [TestMethod]
+    [Description("Tests that Parse with AllowOddLength option handles odd-length hex strings")]
+    public void Parse_WithAllowOddLength_HandlesOddLengthStrings()
+    {
+        // Arrange - odd-length hex strings
+        string[] inputs = { "0xf", "0x123", "f", "123", "0xabcde" };
+        string[] expected = { "0x0f", "0x0123", "0x0f", "0x0123", "0x0abcde" };
+
+        // Act & Assert
+        for (int i = 0; i < inputs.Length; i++)
+        {
+            Hex hex = Hex.Parse(inputs[i], HexParseOptions.AllowOddLength);
+            Assert.AreEqual(expected[i], hex.ToString(), $"Failed for input {inputs[i]}");
+        }
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with Strict option rejects odd-length hex strings")]
+    public void Parse_WithStrictOption_RejectsOddLengthStrings()
+    {
+        // Arrange - odd-length hex strings
+        string[] inputs = { "0xf", "0x123", "f", "123" };
+
+        // Act & Assert
+        foreach (string input in inputs)
+        {
+            Assert.ThrowsException<FormatException>(
+                () => Hex.Parse(input, HexParseOptions.Strict),
+                $"Should throw FormatException for odd-length input {input}");
+        }
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with default option (Strict) rejects odd-length hex strings")]
+    public void Parse_WithDefaultOption_RejectsOddLengthStrings()
+    {
+        // Arrange - odd-length hex strings
+        string[] inputs = { "0xf", "0x123", "f", "123" };
+
+        // Act & Assert
+        foreach (string input in inputs)
+        {
+            Assert.ThrowsException<FormatException>(
+                () => Hex.Parse(input),
+                $"Should throw FormatException for odd-length input {input}");
+        }
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with AllowOddLength option correctly handles common blockchain values")]
+    public void Parse_WithAllowOddLength_HandlesCommonBlockchainValues()
+    {
+        // Common minimal blockchain values
+        var testCases = new[]
+        {
+            new { Input = "0xf", Expected = "0x0f" },       // Single hex digit
+            new { Input = "0xa", Expected = "0x0a" },       // Single hex digit
+            new { Input = "0x1", Expected = "0x01" },       // Single hex digit
+            new { Input = "0xfff", Expected = "0x0fff" },   // Three hex digits
+            new { Input = "0x1a2b3", Expected = "0x01a2b3" } // Five hex digits
+        };
+
+        foreach (var testCase in testCases)
+        {
+            Hex hex = Hex.Parse(testCase.Input, HexParseOptions.AllowOddLength);
+            Assert.AreEqual(testCase.Expected, hex.ToString(),
+                $"Failed for input {testCase.Input}");
+        }
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with AllowOddLength option preserves even-length hex strings")]
+    public void Parse_WithAllowOddLength_PreservesEvenLengthStrings()
+    {
+        // Even-length hex strings
+        var testCases = new[]
+        {
+            new { Input = "0x12", Expected = "0x12" },
+            new { Input = "0xabcd", Expected = "0xabcd" },
+            new { Input = "1234", Expected = "0x1234" },
+            new { Input = "0x", Expected = "0x" },
+            new { Input = "0x0", Expected = "0x0" }
+        };
+
+        foreach (var testCase in testCases)
+        {
+            Hex hex = Hex.Parse(testCase.Input, HexParseOptions.AllowOddLength);
+            Assert.AreEqual(testCase.Expected, hex.ToString(),
+                $"Failed for input {testCase.Input}");
+        }
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with AllowOddLength option still validates hex characters")]
+    public void Parse_WithAllowOddLength_StillValidatesHexCharacters()
+    {
+        // Invalid hex strings (contain non-hex characters)
+        string[] invalidInputs = { "0xg", "0xGG", "WXYZ", "0x12QZ" };
+
+        foreach (string input in invalidInputs)
+        {
+            Assert.ThrowsException<FormatException>(
+                () => Hex.Parse(input, HexParseOptions.AllowOddLength),
+                $"Should throw FormatException for invalid hex input {input}");
+        }
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with AllowOddLength option handles null/empty correctly")]
+    public void Parse_WithAllowOddLength_HandlesNullOrEmptyCorrectly()
+    {
+        // Null or empty inputs
+        string[] invalidInputs = { null, "" };
+
+        foreach (string input in invalidInputs)
+        {
+            Assert.ThrowsException<ArgumentNullException>(
+                () => Hex.Parse(input, HexParseOptions.AllowOddLength),
+                $"Should throw ArgumentNullException for null/empty input");
+        }
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with AllowOddLength option handles special cases correctly")]
+    public void Parse_WithAllowOddLength_HandlesSpecialCasesCorrectly()
+    {
+        // Special cases
+        Assert.AreEqual("0x", Hex.Parse("0x", HexParseOptions.AllowOddLength).ToString(), "Empty hex should remain empty");
+        Assert.AreEqual("0x0", Hex.Parse("0x0", HexParseOptions.AllowOddLength).ToString(), "Single zero should remain as 0x0");
+    }
+
+    #endregion
 }
