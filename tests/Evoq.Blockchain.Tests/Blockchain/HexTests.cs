@@ -66,11 +66,17 @@ public class HexTests
 
     // Parse tests - invalid inputs
     [TestMethod]
-    [DataRow("")]
     [DataRow(null)]
-    public void Parse_NullOrEmpty_ThrowsArgumentNullException(string input)
+    public void Parse_Null_ThrowsArgumentNullException(string input)
     {
         Assert.ThrowsException<ArgumentNullException>(() => Hex.Parse(input));
+    }
+
+    [TestMethod]
+    [DataRow("")]
+    public void Parse_Empty_ThrowsArgumentException(string input)
+    {
+        Assert.ThrowsException<ArgumentException>(() => Hex.Parse(input));
     }
 
     [TestMethod]
@@ -909,17 +915,19 @@ public class HexTests
 
     [TestMethod]
     [Description("Tests that Parse with AllowOddLength option handles null/empty correctly")]
-    public void Parse_WithAllowOddLength_HandlesNullOrEmptyCorrectly()
+    public void Parse_WithAllowOddLength_HandlesNullCorrectly()
     {
-        // Null or empty inputs
-        string[] invalidInputs = { null, "" };
+        Assert.ThrowsException<ArgumentNullException>(
+            () => Hex.Parse(null, HexParseOptions.AllowOddLength),
+            "Should throw ArgumentNullException for null input");
+    }
 
-        foreach (string input in invalidInputs)
-        {
-            Assert.ThrowsException<ArgumentNullException>(
-                () => Hex.Parse(input, HexParseOptions.AllowOddLength),
-                $"Should throw ArgumentNullException for null/empty input");
-        }
+    [TestMethod]
+    public void Parse_WithAllowOddLength_HandlesEmptyCorrectly()
+    {
+        Assert.ThrowsException<ArgumentException>(
+            () => Hex.Parse("", HexParseOptions.AllowOddLength),
+            "Should throw ArgumentException for empty input");
     }
 
     [TestMethod]
@@ -929,6 +937,65 @@ public class HexTests
         // Special cases
         Assert.AreEqual("0x", Hex.Parse("0x", HexParseOptions.AllowOddLength).ToString(), "Empty hex should remain empty");
         Assert.AreEqual("0x0", Hex.Parse("0x0", HexParseOptions.AllowOddLength).ToString(), "Single zero should remain as 0x0");
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with AllowEmptyString option handles empty strings")]
+    public void Parse_WithAllowEmptyString_HandlesEmptyStrings()
+    {
+        // Arrange
+        string[] inputs = { "", string.Empty };
+
+        // Act & Assert
+        foreach (string input in inputs)
+        {
+            Hex hex = Hex.Parse(input, HexParseOptions.AllowEmptyString);
+            Assert.AreEqual(Hex.Empty, hex, "Empty string should return Hex.Empty");
+            Assert.AreEqual("0x", hex.ToString(), "Empty string should return hex that stringifies to 0x");
+            Assert.AreEqual(0, hex.Length, "Empty string should return hex with Length 0");
+        }
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with AllowEmptyString option still throws for null")]
+    public void Parse_WithAllowEmptyString_StillThrowsForNull()
+    {
+        Assert.ThrowsException<ArgumentNullException>(
+            () => Hex.Parse(null, HexParseOptions.AllowEmptyString),
+            "Should still throw ArgumentNullException for null input");
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with combined options works correctly")]
+    public void Parse_WithCombinedOptions_WorksCorrectly()
+    {
+        // Arrange
+        var combinedOptions = HexParseOptions.AllowOddLength | HexParseOptions.AllowEmptyString;
+
+        // Act & Assert - Empty string
+        Hex emptyResult = Hex.Parse("", combinedOptions);
+        Assert.AreEqual(Hex.Empty, emptyResult, "Empty string should return Hex.Empty");
+
+        // Act & Assert - Odd length
+        Hex oddResult = Hex.Parse("0xf", combinedOptions);
+        Assert.AreEqual("0x0f", oddResult.ToString(), "Odd length should be padded");
+
+        // Act & Assert - Normal case
+        Hex normalResult = Hex.Parse("0x1234", combinedOptions);
+        Assert.AreEqual("0x1234", normalResult.ToString(), "Normal case should work as expected");
+    }
+
+    [TestMethod]
+    [Description("Tests that Parse with default options still throws for empty strings")]
+    public void Parse_WithDefaultOptions_ThrowsForEmptyStrings()
+    {
+        Assert.ThrowsException<ArgumentException>(
+            () => Hex.Parse(""),
+            "Should throw ArgumentException for empty input with default options");
+
+        Assert.ThrowsException<ArgumentException>(
+            () => Hex.Parse("", HexParseOptions.Strict),
+            "Should throw ArgumentException for empty input with Strict option");
     }
 
     #endregion

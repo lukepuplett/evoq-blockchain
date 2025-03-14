@@ -52,9 +52,14 @@ public enum HexParseOptions
     /// </summary>
     AllowOddLength = 1,
 
+    /// <summary>
+    /// Treat empty strings as Hex.Empty instead of throwing ArgumentNullException.
+    /// </summary>
+    AllowEmptyString = 2,
+
     // Reserved for future options
-    // Option2 = 2,
-    // Option3 = 4,
+    // Option4 = 4,
+    // Option8 = 8,
     // etc.
 }
 
@@ -123,14 +128,26 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// <param name="hex">The hex string to parse.</param>
     /// <param name="options">Parsing options to control behavior (default: Strict).</param>
     /// <returns>A <see cref="Hex"/> struct representing the parsed hex string.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if the input string is null or empty.</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the input string is null.</exception>
+    /// <exception cref="ArgumentException">Thrown if the input string is empty (unless AllowEmptyString is specified).</exception>
     /// <exception cref="FormatException">Thrown if the input string is not a valid hex string.</exception>
     public static Hex Parse(string hex, HexParseOptions options = HexParseOptions.Strict)
     {
-        // handle null or empty strings
-        if (string.IsNullOrEmpty(hex))
+        if (hex == null)
         {
-            throw new ArgumentNullException(nameof(hex));
+            throw new ArgumentNullException(nameof(hex), "Hex string cannot be null");
+        }
+
+        if (hex == string.Empty)
+        {
+            if ((options & HexParseOptions.AllowEmptyString) != 0)
+            {
+                return Empty;
+            }
+
+            throw new ArgumentException(
+                $"Hex string cannot be empty unless {nameof(HexParseOptions.AllowEmptyString)} is specified",
+                nameof(hex));
         }
 
         // Remove 0x prefix if present
