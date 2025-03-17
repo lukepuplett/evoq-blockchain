@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 
@@ -78,6 +79,7 @@ public interface IByteArray
 /// <summary>
 /// A hex string that is stored as a byte array.
 /// </summary>
+[DebuggerDisplay("{ToString()}")]
 public readonly struct Hex : IEquatable<Hex>, IByteArray
 {
     /// <summary>
@@ -208,6 +210,14 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     /// </summary>
     /// <returns>A copy of the underlying byte array.</returns>
     public byte[] ToByteArray() => value == null ? Array.Empty<byte>() : value.ToArray();
+
+    //
+
+    /// <summary>
+    /// Returns a string representation of the <see cref="Hex"/> struct.
+    /// </summary>
+    /// <returns>A string representation of the <see cref="Hex"/> struct.</returns>
+    public override string ToString() => this.ToString(false);
 
     /// <summary>
     /// Returns a string representation of the <see cref="Hex"/> struct where '0x' indicates an empty value.
