@@ -124,6 +124,49 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
 
     //
 
+
+    /// <summary>
+    /// Attempts to parse a hex string into a <see cref="Hex"/> struct.
+    /// </summary>
+    /// <param name="hex">The hex string to parse.</param>
+    /// <param name="result">When this method returns, contains the parsed <see cref="Hex"/> value if parsing succeeded, or default(Hex) if parsing failed.</param>
+    /// <returns>true if the string was successfully parsed; otherwise, false.</returns>
+    public static bool TryParse(string? hex, out Hex result)
+    {
+        return TryParse(hex, HexParseOptions.Strict, out result);
+    }
+
+    /// <summary>
+    /// Attempts to parse a hex string into a <see cref="Hex"/> struct with the specified parsing options.
+    /// </summary>
+    /// <param name="hex">The hex string to parse.</param>
+    /// <param name="options">Parsing options to control behavior.</param>
+    /// <param name="result">When this method returns, contains the parsed <see cref="Hex"/> value if parsing succeeded, or default(Hex) if parsing failed.</param>
+    /// <returns>true if the string was successfully parsed; otherwise, false.</returns>
+    public static bool TryParse(string? hex, HexParseOptions options, out Hex result)
+    {
+        try
+        {
+            result = Parse(hex!, options);
+            return true;
+        }
+        catch (ArgumentNullException)
+        {
+            result = default;
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            result = default;
+            return false;
+        }
+        catch (FormatException)
+        {
+            result = default;
+            return false;
+        }
+    }
+
     /// <summary>
     /// Parses a hex string into a <see cref="Hex"/> struct.
     /// </summary>

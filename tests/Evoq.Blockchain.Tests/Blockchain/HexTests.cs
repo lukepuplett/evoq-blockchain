@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 
 namespace Evoq.Blockchain.Tests;
@@ -996,6 +995,120 @@ public class HexTests
         Assert.ThrowsException<ArgumentException>(
             () => Hex.Parse("", HexParseOptions.Strict),
             "Should throw ArgumentException for empty input with Strict option");
+    }
+
+    #endregion
+
+    #region TryParse Tests
+
+    [TestMethod]
+    [Description("Tests that TryParse succeeds with valid hex strings")]
+    [DataRow("0x1234", "0x1234")]
+    [DataRow("1234", "0x1234")]
+    [DataRow("0xabcd", "0xabcd")]
+    [DataRow("ABCD", "0xabcd")]  // Should normalize to lowercase
+    public void TryParse_ValidHexString_ReturnsTrue(string input, string expected)
+    {
+        // Act
+        bool success = Hex.TryParse(input, out Hex result);
+
+        // Assert
+        Assert.IsTrue(success, "TryParse should return true for valid input");
+        Assert.AreEqual(expected, result.ToString());
+    }
+
+    [TestMethod]
+    [Description("Tests that TryParse handles special zero values correctly")]
+    [DataRow("0x", "0x")]
+    [DataRow("0x0", "0x0")]
+    [DataRow("00", "0x0")]
+    [DataRow("0000", "0x0000")]
+    public void TryParse_ZeroValues_ReturnsTrueAndPreservesLength(string input, string expected)
+    {
+        // Act
+        bool success = Hex.TryParse(input, out Hex result);
+
+        // Assert
+        Assert.IsTrue(success, "TryParse should return true for zero values");
+        Assert.AreEqual(expected, result.ToString());
+
+        // Special case for "0x0"
+        if (expected == "0x0")
+            Assert.AreEqual(1, result.Length);
+        else
+            Assert.AreEqual(expected.Length > 2 ? (expected.Length - 2) / 2 : 0, result.Length);
+    }
+
+    [TestMethod]
+    [Description("Tests that TryParse fails with invalid inputs")]
+    [DataRow(null)]
+    [DataRow("")]
+    [DataRow("0xGG")]   // Invalid hex chars
+    [DataRow("WXYZ")]   // Invalid hex chars
+    [DataRow("0x1")]    // Odd length
+    [DataRow("0x123")]  // Odd length
+    [DataRow("1")]      // Odd length
+    [DataRow("123")]    // Odd length
+    public void TryParse_InvalidInput_ReturnsFalse(string input)
+    {
+        // Act
+        bool success = Hex.TryParse(input, out Hex result);
+
+        // Assert
+        Assert.IsFalse(success, $"TryParse should return false for invalid input: {input}");
+        Assert.AreEqual(default(Hex), result, "Result should be default(Hex) when parsing fails");
+    }
+
+    [TestMethod]
+    [Description("Tests that TryParse with options handles odd-length strings correctly")]
+    [DataRow("0x1", "0x01")]
+    [DataRow("0x123", "0x0123")]
+    [DataRow("1", "0x01")]
+    [DataRow("123", "0x0123")]
+    public void TryParse_OddLengthWithAllowOddLength_ReturnsTrue(string input, string expected)
+    {
+        // Act
+        bool success = Hex.TryParse(input, HexParseOptions.AllowOddLength, out Hex result);
+
+        // Assert
+        Assert.IsTrue(success, "TryParse should return true with AllowOddLength option");
+        Assert.AreEqual(expected, result.ToString());
+    }
+
+    [TestMethod]
+    [Description("Tests that TryParse with options handles empty strings correctly")]
+    public void TryParse_EmptyStringWithAllowEmptyString_ReturnsTrue()
+    {
+        // Act
+        bool success = Hex.TryParse("", HexParseOptions.AllowEmptyString, out Hex result);
+
+        // Assert
+        Assert.IsTrue(success, "TryParse should return true with AllowEmptyString option");
+        Assert.AreEqual(Hex.Empty, result);
+        Assert.AreEqual("0x", result.ToString());
+    }
+
+    [TestMethod]
+    [Description("Tests that TryParse with combined options works correctly")]
+    public void TryParse_WithCombinedOptions_HandlesAllCases()
+    {
+        var options = HexParseOptions.AllowOddLength | HexParseOptions.AllowEmptyString;
+
+        // Test empty string
+        Assert.IsTrue(Hex.TryParse("", options, out Hex emptyResult), "Should handle empty string");
+        Assert.AreEqual(Hex.Empty, emptyResult);
+
+        // Test odd length
+        Assert.IsTrue(Hex.TryParse("0x1", options, out Hex oddResult), "Should handle odd length");
+        Assert.AreEqual("0x01", oddResult.ToString());
+
+        // Test normal case
+        Assert.IsTrue(Hex.TryParse("0x1234", options, out Hex normalResult), "Should handle normal case");
+        Assert.AreEqual("0x1234", normalResult.ToString());
+
+        // Test invalid still fails
+        Assert.IsFalse(Hex.TryParse("0xGG", options, out Hex invalidResult), "Should still fail for invalid hex");
+        Assert.AreEqual(default(Hex), invalidResult);
     }
 
     #endregion
