@@ -732,4 +732,35 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     {
         return hex.ToPaddedHex(byteLength);
     }
+
+    /// <summary>
+    /// Concatenates a list of Hex values into a single Hex value.
+    /// </summary>
+    /// <param name="hexes">The list of Hex values to concatenate.</param>
+    /// <returns>A new Hex value containing the concatenated bytes.</returns>
+    public static Hex Concat(params Hex[] hexes)
+    {
+        if (hexes == null || hexes.Length == 0)
+        {
+            return Empty;
+        }
+
+        int totalLength = hexes.Sum(h => h.Length);
+        byte[] concatenated = new byte[totalLength];
+
+        int currentIndex = 0;
+
+        foreach (var hex in hexes)
+        {
+            if (hex.value == null)
+            {
+                throw new InvalidOperationException("Cannot concatenate a null Hex value");
+            }
+
+            Array.Copy(hex.value, 0, concatenated, currentIndex, hex.value.Length);
+            currentIndex += hex.value.Length;
+        }
+
+        return new Hex(concatenated);
+    }
 }

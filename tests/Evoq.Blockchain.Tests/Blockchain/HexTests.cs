@@ -1112,4 +1112,108 @@ public class HexTests
     }
 
     #endregion
+
+    #region Concat Tests
+
+    [TestMethod]
+    [Description("Tests that Concat combines multiple Hex values correctly")]
+    public void Concat_MultipleValues_CombinesCorrectly()
+    {
+        // Arrange
+        Hex hex1 = Hex.Parse("0x1234");
+        Hex hex2 = Hex.Parse("0xabcd");
+        Hex hex3 = Hex.Parse("0xff00");
+
+        // Act
+        Hex result = Hex.Concat(hex1, hex2, hex3);
+
+        // Assert
+        Assert.AreEqual("0x1234abcdff00", result.ToString());
+        Assert.AreEqual(6, result.Length); // 6 bytes total (2 + 2 + 2)
+    }
+
+    [TestMethod]
+    [Description("Tests that Concat with empty values works correctly")]
+    public void Concat_WithEmptyValues_HandlesCorrectly()
+    {
+        // Arrange
+        Hex hex1 = Hex.Parse("0x1234");
+        Hex empty = Hex.Empty;
+
+        // Act
+        Hex resultWithEmptyFirst = Hex.Concat(empty, hex1);
+        Hex resultWithEmptyLast = Hex.Concat(hex1, empty);
+        Hex resultWithMultipleEmpty = Hex.Concat(empty, hex1, empty);
+
+        // Assert
+        Assert.AreEqual("0x1234", resultWithEmptyFirst.ToString());
+        Assert.AreEqual("0x1234", resultWithEmptyLast.ToString());
+        Assert.AreEqual("0x1234", resultWithMultipleEmpty.ToString());
+        Assert.AreEqual(2, resultWithEmptyFirst.Length);
+        Assert.AreEqual(2, resultWithEmptyLast.Length);
+        Assert.AreEqual(2, resultWithMultipleEmpty.Length);
+    }
+
+    [TestMethod]
+    [Description("Tests that Concat with null array returns Empty")]
+    public void Concat_NullOrEmptyArray_ReturnsEmpty()
+    {
+        // Act
+        Hex resultWithNull = Hex.Concat(null);
+        Hex resultWithEmpty = Hex.Concat();
+
+        // Assert
+        Assert.AreEqual(Hex.Empty, resultWithNull);
+        Assert.AreEqual(Hex.Empty, resultWithEmpty);
+        Assert.AreEqual("0x", resultWithNull.ToString());
+        Assert.AreEqual("0x", resultWithEmpty.ToString());
+    }
+
+    [TestMethod]
+    [Description("Tests that Concat handles single value correctly")]
+    public void Concat_SingleValue_ReturnsCopy()
+    {
+        // Arrange
+        Hex original = Hex.Parse("0x1234");
+
+        // Act
+        Hex result = Hex.Concat(original);
+
+        // Assert
+        Assert.AreEqual(original, result);
+        Assert.AreEqual("0x1234", result.ToString());
+        Assert.AreNotSame(original, result, "Should return a new instance");
+    }
+
+    [TestMethod]
+    [Description("Tests that Concat throws when a null Hex value is in the array")]
+    public void Concat_ArrayWithNullHex_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        Hex hex1 = Hex.Parse("0x1234");
+        Hex hex2 = default(Hex); // Null value
+
+        // Act & Assert
+        Assert.ThrowsException<InvalidOperationException>(
+            () => Hex.Concat(hex1, hex2),
+            "Should throw InvalidOperationException when a null Hex value is in the array");
+    }
+
+    [TestMethod]
+    [Description("Tests that Concat works with large values")]
+    public void Concat_LargeValues_CombinesCorrectly()
+    {
+        // Arrange
+        Hex hex1 = Hex.Parse("0x1234567890abcdef");
+        Hex hex2 = Hex.Parse("0xfedcba0987654321");
+
+        // Act
+        Hex result = Hex.Concat(hex1, hex2);
+
+        // Assert
+        Assert.AreEqual("0x1234567890abcdeffedcba0987654321", result.ToString());
+        Assert.AreEqual(16, result.Length); // 16 bytes total (8 + 8)
+    }
+
+    #endregion
 }
