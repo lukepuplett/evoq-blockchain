@@ -7,8 +7,7 @@ This directory contains documentation for the Evoq.Blockchain library, a lightwe
 ### [Merkle Trees](./merkle/README.md)
 
 Documentation for our Merkle tree implementation, including:
-- [Selective Disclosure in Merkle Trees](./merkle/selective-disclosure.md)
-- [Examples](./merkle/examples/)
+- [Selective Disclosure in Merkle Trees](./merkle/selective-disclosure.md) - includes complete examples
 
 ## Overview
 

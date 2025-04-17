@@ -21,8 +21,7 @@ dotnet add package Evoq.Blockchain
 Comprehensive documentation is available in the [docs directory](./docs/):
 
 - [Merkle Tree Implementation](./docs/merkle/README.md)
-  - [Selective Disclosure in Merkle Trees](./docs/merkle/selective-disclosure.md)
-  - [Examples](./docs/merkle/examples/)
+  - [Selective Disclosure in Merkle Trees](./docs/merkle/selective-disclosure.md) (includes complete examples)
 
 ## Target Frameworks
 

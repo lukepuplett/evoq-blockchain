@@ -6,11 +6,7 @@ This directory contains documentation for our Merkle tree implementation, focusi
 
 ### [Selective Disclosure](./selective-disclosure.md)
 
-Documentation on our approach to selective disclosure in Merkle trees, allowing for privacy-preserving verification where only specific leaves are revealed while maintaining the cryptographic integrity of the tree.
-
-### Examples
-
-- [Selective Disclosure Example: Digital Passport](./examples/selective-disclosure-example.md): A practical example showing how to implement selective disclosure with a digital passport.
+Documentation on our approach to selective disclosure in Merkle trees, allowing for privacy-preserving verification where only specific leaves are revealed while maintaining the cryptographic integrity of the tree. Includes a complete example with digital passport data.
 
 ## Key Features
 
@@ -29,7 +25,7 @@ The Merkle tree implementation is available in the `Evoq.Blockchain.Merkle` name
 
 ## Usage
 
-For basic usage examples and a guide to get started, see the examples directory.
+For a complete usage example, see the [Complete Example section in the Selective Disclosure documentation](./selective-disclosure.md#complete-example-digital-passport).
 
 For more detailed implementation information, examine the source code in:
 `src/Evoq.Blockchain/Blockchain.Merkle/MerkleTree.cs` 
