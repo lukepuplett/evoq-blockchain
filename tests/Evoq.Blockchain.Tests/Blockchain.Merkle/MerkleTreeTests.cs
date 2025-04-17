@@ -390,7 +390,7 @@ public class MerkleTreeTests
     }
 
     [TestMethod]
-    public void CreatePassportDataTree_SaveToFile_PrintsLocation()
+    public void CreatePassportDataTree_SaveToFile_WithPrivateLeaf_PrintsLocation()
     {
         // Arrange - Create passport data with a flatter structure
         var passportData = new Dictionary<string, object?>
@@ -433,6 +433,9 @@ public class MerkleTreeTests
         // Act - Create the Merkle tree
         var merkleTree = new MerkleTree("1.0");
 
+        // Dictionary to keep track of the leaf for each field
+        var leafMap = new Dictionary<string, MerkleLeaf>();
+
         // Instead of using AddJsonLeaves, we'll manually add each leaf with hex-encoded JSON
         foreach (var pair in passportData)
         {
@@ -448,7 +451,8 @@ public class MerkleTreeTests
             // Use a content type that indicates it's JSON in UTF-8 encoded as hex
             string contentType = ContentTypeUtility.CreateJsonUtf8Hex();
 
-            merkleTree.AddLeaf(jsonHex, salt, contentType, MerkleTree.ComputeSha256Hash);
+            var leaf = merkleTree.AddLeaf(jsonHex, salt, contentType, MerkleTree.ComputeSha256Hash);
+            leafMap[pair.Key] = leaf;
         }
 
         merkleTree.RecomputeSha256Root();
@@ -456,34 +460,115 @@ public class MerkleTreeTests
         // Verify the root
         Assert.IsTrue(merkleTree.VerifySha256Root());
 
-        // Save to a temporary file
-        string tempFilePath = Path.Combine(Path.GetTempPath(), $"passport_merkle_tree_{Guid.NewGuid()}.json");
-        File.WriteAllText(tempFilePath, merkleTree.ToJson());
+        // Create a predicate that makes the document number private
+        Predicate<MerkleLeaf> makePrivate = leaf =>
+            leaf.TryReadText(out string text) && text.Contains("documentNumber");
+
+        // Create JSON options to omit null values
+        var jsonOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        };
+
+        // Save to a temporary file with one private leaf
+        string tempFilePath = Path.Combine(Path.GetTempPath(), $"passport_merkle_tree_with_private_{Guid.NewGuid()}.json");
+        File.WriteAllText(tempFilePath, merkleTree.ToJson(MerkleTree.ComputeSha256Hash, makePrivate, jsonOptions));
 
         // Print the file location for manual inspection (with attention-grabbing markers)
         Console.WriteLine("==================================================================");
-        Console.WriteLine($"MERKLE TREE FILE LOCATION: {tempFilePath}");
+        Console.WriteLine($"MERKLE TREE WITH PRIVATE DOCUMENT NUMBER: {tempFilePath}");
 
         // Print the first few lines of the file for quick inspection
         string fileContent = File.ReadAllText(tempFilePath);
-        string firstFewLines = string.Join(Environment.NewLine,
-            fileContent.Split(Environment.NewLine).Take(15));
-        Console.WriteLine("First few lines of the file:");
-        Console.WriteLine(firstFewLines);
+        Console.WriteLine("File content:");
+        Console.WriteLine(fileContent);
         Console.WriteLine("==================================================================");
 
         // Ensure the file exists (for the test)
         Assert.IsTrue(File.Exists(tempFilePath));
 
-        // Cleanup (optional, comment this out if you want to keep the file)
+        // Verify that we can still parse and verify the tree with the private leaf
+        var parsedTree = MerkleTree.Parse(fileContent);
+        Assert.IsTrue(parsedTree.VerifySha256Root(), "Tree with private document number should verify");
+
+        // Optionally cleanup
         // File.Delete(tempFilePath);
     }
 
-    /// <summary>
-    /// Converts a JSON string to a hex-encoded byte array.
-    /// </summary>
-    /// <param name="json">The JSON string to convert.</param>
-    /// <returns>A hex representation of the JSON string.</returns>
+    [TestMethod]
+    public void ToJson_WithPrivateLeaves_ShouldOmitDataAndSaltForPrivateLeaves()
+    {
+        // Arrange
+        var tree = new MerkleTree();
+
+        // Add three leaves - one for each data type
+        var leafA = tree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        var leafB = tree.AddJsonLeaf("dob", "1980-01-15", Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+        var leafC = tree.AddJsonLeaf("ssn", "123-45-6789", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+
+        tree.RecomputeSha256Root();
+
+        // Create a predicate that only makes the SSN private
+        Predicate<MerkleLeaf> makePrivate = leaf =>
+            leaf.TryReadText(out string text) && text.Contains("ssn");
+
+        // Act
+        string json = tree.ToJson(MerkleTree.ComputeSha256Hash, makePrivate);
+
+        // Assert
+        // Parse the JSON for inspection
+        var jsonDoc = JsonDocument.Parse(json);
+        var leavesArray = jsonDoc.RootElement.GetProperty("leaves").EnumerateArray().ToArray();
+
+        // Should have 3 leaves
+        Assert.AreEqual(3, leavesArray.Length);
+
+        // Check each leaf
+        foreach (var leafElement in leavesArray)
+        {
+            // All leaves should have hash property
+            Assert.IsTrue(leafElement.TryGetProperty("hash", out _), "All leaves should have a hash");
+
+            bool hasData = leafElement.TryGetProperty("data", out var dataProperty);
+            bool hasSalt = leafElement.TryGetProperty("salt", out _);
+            bool hasContentType = leafElement.TryGetProperty("contentType", out _);
+
+            // If this is the private leaf (SSN)
+            if (hasData && dataProperty.ValueKind == JsonValueKind.String)
+            {
+                string dataValue = dataProperty.GetString() ?? string.Empty;
+
+                if (dataValue.Contains("ssn"))
+                {
+                    Assert.Fail("Found SSN data in JSON output when it should be private");
+                }
+            }
+
+            // Private leaves should have only hash property
+            if (!hasData && !hasSalt && !hasContentType)
+            {
+                // This should be our private leaf - verify it has the hash
+                Assert.IsTrue(leafElement.TryGetProperty("hash", out _),
+                    "Private leaf should have a hash");
+            }
+            else
+            {
+                // Non-private leaves should have all properties
+                Assert.IsTrue(hasData, "Non-private leaf should have data");
+                Assert.IsTrue(hasSalt, "Non-private leaf should have salt");
+                Assert.IsTrue(hasContentType, "Non-private leaf should have contentType");
+            }
+        }
+
+        // Verify we can parse it back into a valid tree
+        var parsedTree = MerkleTree.Parse(json);
+        Assert.IsTrue(parsedTree.VerifySha256Root(), "Parsed tree from JSON with private leaves should verify");
+    }
+
+    //
+
     private static Hex JsonToHex(string json)
     {
         // Convert the JSON string to UTF-8 encoded bytes

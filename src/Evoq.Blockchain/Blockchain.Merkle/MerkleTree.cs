@@ -137,7 +137,7 @@ public class MerkleTree
             return this.Root.Equals(Hex.Empty);
         }
 
-        var computedRoot = ComputeMerkleRoot(Leaves.Select(l => l.Hash).ToList(), hashFunction);
+        var computedRoot = this.ComputeRootFromLeafHashes(hashFunction);
 
         return this.Root.Equals(computedRoot);
     }
@@ -165,10 +165,12 @@ public class MerkleTree
             throw new ArgumentException("Hash algorithm name cannot be empty", nameof(hashAlgorithmName));
         }
 
-        // Compute the root from leaves
-        this.Root = ComputeRoot(hashFunction);
+        if (Leaves.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot recompute root from empty tree");
+        }
 
-        // Update metadata
+        this.Root = ComputeRootFromLeafHashes(hashFunction);
         this.Metadata = new MerkleMetadata
         {
             HashAlgorithm = hashAlgorithmName,
@@ -247,31 +249,38 @@ public class MerkleTree
     /// Converts the MerkleTree object to its JSON string representation after verifying the root.
     /// </summary>
     /// <param name="hashFunction">The hash function to use for verification.</param>
+    /// <param name="makePrivate">A predicate to determine if a leaf should be made private.</param>
+    /// <param name="options">JSON serializer options to customize the output.</param>
     /// <returns>A JSON string representation of the MerkleTree object.</returns>
     /// <exception cref="InvalidRootException">Thrown if the root verification fails.</exception>
-    public string ToJson(HashFunction hashFunction)
+    public string ToJson(HashFunction hashFunction, Predicate<MerkleLeaf>? makePrivate = null, JsonSerializerOptions? options = null)
     {
         if (!VerifyRoot(hashFunction))
         {
             throw new InvalidRootException(
                 $"Merkle tree root verification failed. The root hash '{Root}' does not" +
-                $" match the computed hash '{ComputeRoot(hashFunction)}' from leaves.");
+                $" match the computed hash '{ComputeRootFromLeafHashes(hashFunction)}' from leaves.");
         }
 
-        var options = new JsonSerializerOptions
+        options ??= new JsonSerializerOptions
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        MerkleTreeDto dto = ToDto();
+        MerkleTreeDto dto = this.ToDto(makePrivate ?? (leaf => false));
         return JsonSerializer.Serialize(dto, options);
     }
 
     //
 
-    private Hex ComputeRoot(HashFunction hashFunction)
+    private Hex ComputeRootFromLeafHashes(HashFunction hashFunction)
     {
+        if (Leaves.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot compute root from empty tree");
+        }
+
         return ComputeMerkleRoot(Leaves.Select(l => l.Hash).ToList(), hashFunction);
     }
 
@@ -294,13 +303,15 @@ public class MerkleTree
             if (i + 1 < hashes.Count)
             {
                 // Concatenate the two hashes and hash them together
-                var combinedBytes = ConcatenateHashes(hashes[i], hashes[i + 1]);
+
+                var combinedBytes = ConcatenateHashes(hashes[i], hashes[i + 1]); // left and right
                 nextLevel.Add(hashFunction(combinedBytes));
             }
             else
             {
                 // Odd number of hashes, duplicate the last one
-                var combinedBytes = ConcatenateHashes(hashes[i], hashes[i]);
+
+                var combinedBytes = ConcatenateHashes(hashes[i], hashes[i]); // duplicate the last one
                 nextLevel.Add(hashFunction(combinedBytes));
             }
         }
@@ -321,19 +332,33 @@ public class MerkleTree
         return result;
     }
 
-    private MerkleTreeDto ToDto()
+    private MerkleTreeDto ToDto(Predicate<MerkleLeaf> makePrivate)
     {
+        MerkleLeafDto makeLeafDto(MerkleLeaf leaf)
+        {
+            if (makePrivate(leaf))
+            {
+                return new MerkleLeafDto
+                {
+                    Hash = leaf.Hash.ToString()
+                };
+            }
+            else
+            {
+                return new MerkleLeafDto
+                {
+                    Data = leaf.ToHexString(),
+                    Salt = leaf.Salt.ToString(),
+                    Hash = leaf.Hash.ToString(),
+                    ContentType = leaf.ContentType
+                };
+            }
+        }
+
         return new MerkleTreeDto
         {
             Root = Root.ToString(),
-            Leaves = Leaves?.Select(l => new MerkleLeafDto
-            {
-                // Always use hex representation for data
-                Data = l.ToHexString(),
-                Salt = l.Salt.ToString(),
-                Hash = l.Hash.ToString(),
-                ContentType = l.ContentType
-            }).ToList(),
+            Leaves = Leaves?.Select(l => makeLeafDto(l)).ToList(),
             Metadata = new MerkleMetadataDto
             {
                 HashAlgorithm = Metadata?.HashAlgorithm ?? string.Empty,
@@ -344,7 +369,9 @@ public class MerkleTree
 
     private static MerkleTree FromDto(MerkleTreeDto dto)
     {
-        static Hex readData(MerkleLeafDto leafDto)
+        var hexParseOptions = HexParseOptions.AllowEmptyString | HexParseOptions.AllowNullString;
+
+        Hex readData(MerkleLeafDto leafDto)
         {
             if (string.IsNullOrEmpty(leafDto.Data))
             {
@@ -353,7 +380,7 @@ public class MerkleTree
 
             if (leafDto.Data.StartsWith("0x"))
             {
-                return Hex.Parse(leafDto.Data, HexParseOptions.AllowEmptyString);
+                return Hex.Parse(leafDto.Data, hexParseOptions);
             }
 
             return new Hex(System.Text.Encoding.UTF8.GetBytes(leafDto.Data));
@@ -361,12 +388,12 @@ public class MerkleTree
 
         return new MerkleTree
         {
-            Root = Hex.Parse(dto.Root, HexParseOptions.AllowEmptyString),
+            Root = Hex.Parse(dto.Root, hexParseOptions),
             Leaves = dto.Leaves?.Select(l => new MerkleLeaf(
                 l.ContentType,
                 readData(l),
-                Hex.Parse(l.Salt, HexParseOptions.AllowEmptyString),
-                Hex.Parse(l.Hash, HexParseOptions.AllowEmptyString)
+                Hex.Parse(l.Salt, hexParseOptions),
+                Hex.Parse(l.Hash, hexParseOptions)
             )).ToList() ?? new List<MerkleLeaf>(),
             Metadata = new MerkleMetadata
             {

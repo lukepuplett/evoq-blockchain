@@ -58,6 +58,11 @@ public enum HexParseOptions
     /// </summary>
     AllowEmptyString = 2,
 
+    /// <summary>
+    /// Allow null strings to be parsed as Hex.Empty instead of throwing ArgumentNullException.
+    /// </summary>
+    AllowNullString = 4,
+
     // Reserved for future options
     // Option4 = 4,
     // Option8 = 8,
@@ -180,6 +185,11 @@ public readonly struct Hex : IEquatable<Hex>, IByteArray
     {
         if (hex == null)
         {
+            if ((options & HexParseOptions.AllowNullString) != 0)
+            {
+                return Empty;
+            }
+
             throw new ArgumentNullException(nameof(hex), "Hex string cannot be null");
         }
 

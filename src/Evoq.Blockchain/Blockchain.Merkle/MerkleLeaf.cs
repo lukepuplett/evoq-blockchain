@@ -43,19 +43,25 @@ public class MerkleLeaf
     public bool IsBase64 => ContentTypeUtility.IsBase64(ContentType);
 
     /// <summary>
+    /// Gets a value indicating whether this leaf is private (data and salt are not provided,
+    /// but hash is available for verification).
+    /// </summary>
+    public bool IsPrivate => this.Data.IsEmpty() && this.Salt.IsEmpty() && !this.Hash.IsEmpty();
+
+    /// <summary>
     /// Gets or sets the data contained in the leaf.
     /// </summary>
-    public Hex Data { get; set; } = Hex.Empty;
+    public Hex Data { get; } = Hex.Empty;
 
     /// <summary>
     /// Gets or sets the salt used for hashing the leaf data.
     /// </summary>
-    public Hex Salt { get; set; } = Hex.Empty;
+    public Hex Salt { get; } = Hex.Empty;
 
     /// <summary>
     /// Gets or sets the hash of the leaf.
     /// </summary>
-    public Hex Hash { get; set; } = Hex.Empty;
+    public Hex Hash { get; } = Hex.Empty;
 
     //
 

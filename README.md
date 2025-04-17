@@ -14,6 +14,15 @@ dotnet add package Evoq.Blockchain
 - Common blockchain data structures
 - Utility methods for blockchain operations
 - Framework-agnostic design (works with any blockchain implementation)
+- [Merkle trees with selective disclosure](./docs/merkle/selective-disclosure.md)
+
+## Documentation
+
+Comprehensive documentation is available in the [docs directory](./docs/):
+
+- [Merkle Tree Implementation](./docs/merkle/README.md)
+  - [Selective Disclosure in Merkle Trees](./docs/merkle/selective-disclosure.md)
+  - [Examples](./docs/merkle/examples/)
 
 ## Target Frameworks
 
