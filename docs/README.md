@@ -30,4 +30,4 @@ dotnet add package Evoq.Blockchain
 
 ## Contributing
 
-Contributions to both the code and documentation are welcome! Please see the [main README](../README.md) for contribution guidelines. 
+Contributions to both the code and documentation are welcome! Please see the [main README](../README.md) for contribution guidelines.
