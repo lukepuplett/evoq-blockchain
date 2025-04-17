@@ -598,6 +598,54 @@ public class MerkleTreeTests
         Assert.IsFalse(parsedTree.VerifySha256Root(), "Tree verification should detect tampered leaf data");
     }
 
+    [TestMethod]
+    public void RoundTrip_WithPrivateLeaves_ShouldValidateAfterParsing()
+    {
+        // Arrange - Create a merkle tree with some data
+        var tree = new MerkleTree();
+        tree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        tree.AddJsonLeaf("ssn", "123-45-6789", Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash); // Sensitive info
+        tree.AddJsonLeaf("address", "123 Main St", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+        tree.RecomputeSha256Root();
+
+        // Create a predicate that only makes the SSN private
+        Predicate<MerkleLeaf> makePrivate = leaf =>
+            leaf.TryReadText(out string text) && text.Contains("ssn");
+
+        // Act - First roundtrip: Convert to JSON with one private leaf
+        string json = tree.ToJson(MerkleTree.ComputeSha256Hash, makePrivate);
+
+        // Verify the JSON doesn't contain the SSN
+        Assert.IsFalse(json.Contains("123-45-6789"), "JSON should not contain the private SSN data");
+
+        // Parse the JSON back into a tree
+        var parsedTree = MerkleTree.Parse(json);
+
+        // Verify the parsed tree (with one private leaf) still validates
+        Assert.IsTrue(parsedTree.VerifySha256Root(), "Tree with private leaf should still verify");
+
+        // Check that we have one private leaf
+        bool hasPrivateLeaf = false;
+        foreach (var leaf in parsedTree.Leaves)
+        {
+            if (leaf.IsPrivate)
+            {
+                hasPrivateLeaf = true;
+                break;
+            }
+        }
+        Assert.IsTrue(hasPrivateLeaf, "Parsed tree should have at least one private leaf");
+
+        // Second roundtrip: Convert the parsed tree back to JSON
+        string secondJson = parsedTree.ToJson();
+
+        // Parse the second JSON back
+        var secondParsedTree = MerkleTree.Parse(secondJson);
+
+        // Verify the twice-parsed tree still validates
+        Assert.IsTrue(secondParsedTree.VerifySha256Root(), "Tree after second roundtrip should still verify");
+    }
+
     //
 
     private static string BytesToHexString(byte[] bytes)
