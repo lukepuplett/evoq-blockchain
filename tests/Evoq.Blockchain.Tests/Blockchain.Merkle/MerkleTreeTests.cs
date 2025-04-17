@@ -226,7 +226,7 @@ public class MerkleTreeTests
 
         // Act
         var merkleTree = new MerkleTree();
-        merkleTree.AddJsonLeaves(keyValues, Hex.Empty, MerkleTree.ComputeSha256Hash);
+        merkleTree.AddJsonLeaves(keyValues);
 
         // Assert
         Assert.AreEqual(3, merkleTree.Leaves.Count);
@@ -287,7 +287,6 @@ public class MerkleTreeTests
     public void AddJsonLeaves_WithMixedValues_ShouldCreateProperJsonLeaves()
     {
         // Arrange
-        var salt = Hex.Parse("0x98765432");
         var keyValues = new Dictionary<string, object?>
         {
             { "name", "Sarah" },
@@ -308,7 +307,7 @@ public class MerkleTreeTests
 
         // Act
         var merkleTree = new MerkleTree();
-        merkleTree.AddJsonLeaves(keyValues, salt, MerkleTree.ComputeSha256Hash);
+        merkleTree.AddJsonLeaves(keyValues);
         merkleTree.RecomputeSha256Root();
 
         // Assert
@@ -322,7 +321,7 @@ public class MerkleTreeTests
         {
             Assert.IsTrue(ContentTypeUtility.IsJson(leaf.ContentType));
             Assert.IsTrue(leaf.IsUtf8);
-            Assert.AreEqual(salt, leaf.Salt);
+            Assert.IsFalse(leaf.Salt.IsEmpty());
         }
 
         // Verify individual leaves have correct JSON content
@@ -427,9 +426,6 @@ public class MerkleTreeTests
             }
         };
 
-        // Create a unique salt for this passport
-        var salt = Hex.Parse("0x7f8e7d6c5b4a3210");
-
         // Act - Create the Merkle tree
         var merkleTree = new MerkleTree("1.0");
 
@@ -451,7 +447,7 @@ public class MerkleTreeTests
             // Use a content type that indicates it's JSON in UTF-8 encoded as hex
             string contentType = ContentTypeUtility.CreateJsonUtf8Hex();
 
-            var leaf = merkleTree.AddLeaf(jsonHex, salt, contentType, MerkleTree.ComputeSha256Hash);
+            var leaf = merkleTree.AddLeaf(jsonHex, contentType);
             leafMap[pair.Key] = leaf;
         }
 

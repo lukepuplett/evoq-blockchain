@@ -26,6 +26,13 @@ Traditional approaches require either:
 
 Our implementation provides a clean, elegant solution to this problem through a technique we call "private leaves" - leaves whose content is withheld while their cryptographic presence is maintained.
 
+## Important: Security Through Unique Salts
+
+> **SECURITY BEST PRACTICE**: Each leaf in a Merkle tree should have its own unique random salt. 
+> This is critical for preventing correlation attacks where identical data would otherwise produce identical hashes.
+
+Our API now defaults to automatically generating secure random salts for each leaf. Always use the methods that automatically generate unique salts unless you have a specific reason not to.
+
 ## Our Approach
 
 We've implemented a simple yet powerful solution that enables any subset of leaves to be marked as private, while maintaining the tree's verifiability. This approach has several key advantages:
@@ -47,11 +54,7 @@ Predicate<MerkleLeaf> makePrivate = leaf =>
     leaf.TryReadText(out string text) && text.Contains("documentNumber");
 
 // Serialize to JSON with selective privacy
-string json = merkleTree.ToJson(
-    MerkleTree.ComputeSha256Hash, 
-    makePrivate,
-    new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }
-);
+string json = merkleTree.ToJson(makePrivate);
 ```
 
 This expressive approach lets you use any boolean logic to determine which leaves should be private, whether based on content, metadata, or other criteria.
@@ -64,7 +67,7 @@ When serialized, private leaves contain only their hash value, with data, salt, 
 // Regular leaf with all fields
 {
   "data": "0x7b22646f63756d656e7454797065223a2270617373706f7274227d",
-  "salt": "0x7f8e7d6c5b4a3210",
+  "salt": "0xa48c12f5e7b943de67c8901f",
   "hash": "0x05e7faf4a47104a39003db687c19c25b1d8178a00573340fa11e93235229e096",
   "contentType": "application/json; charset=utf-8; encoding=hex"
 },
@@ -102,6 +105,16 @@ While this approach provides practical privacy, it's important to understand its
 - It doesn't provide cryptographic hiding properties like zero-knowledge proofs
 
 For most practical applications, these limitations are acceptable given the simplicity and efficiency of the approach.
+
+### Salt Security
+
+For optimal security, each leaf should use its own unique random salt:
+
+- **Unique Salts**: Generate a cryptographically secure random salt for each leaf
+- **Salt Length**: Use at least 16 bytes (128 bits) of randomness for each salt
+- **Prevent Correlation**: Different salts ensure that identical data in different leaves produces different hashes
+
+Using unique random salts for each leaf is critical for preventing correlation attacks where an attacker might identify patterns in the hashed data.
 
 ## Complete Example: Digital Passport
 
@@ -147,35 +160,37 @@ var passportData = new Dictionary<string, object?>
     }
 };
 
-// Create a unique salt for this passport
-var salt = Hex.Parse("0x7f8e7d6c5b4a3210");
-
-// Create the Merkle tree
-var merkleTree = new MerkleTree("1.0");
-
-// Add each field as a leaf in the tree
-foreach (var pair in passportData)
-{
-    // Convert the key-value pair to a JSON object
-    var jsonObject = new Dictionary<string, object?>
-    {
-        { pair.Key, pair.Value }
-    };
-
-    string json = JsonSerializer.Serialize(jsonObject);
-    Hex jsonHex = new Hex(System.Text.Encoding.UTF8.GetBytes(json));
-
-    // Use a content type that indicates it's JSON in UTF-8 encoded as hex
-    string contentType = "application/json; charset=utf-8; encoding=hex";
-
-    merkleTree.AddLeaf(jsonHex, salt, contentType, MerkleTree.ComputeSha256Hash);
-}
+// Create the Merkle tree and add all fields as leaves with automatically generated random salts
+var merkleTree = new MerkleTree();
+merkleTree.AddJsonLeaves(passportData);  // Uses random salts automatically
 
 // Compute the root hash
 merkleTree.RecomputeSha256Root();
 
 // Verify the root
 bool isValid = merkleTree.VerifySha256Root(); // Should be true
+```
+
+### Alternative approaches
+
+The API provides multiple ways to add leaves with secure random salts:
+
+```csharp
+// Option 1: Add all leaves at once from a dictionary (preferred)
+merkleTree.AddJsonLeaves(passportData);
+
+// Option 2: Add individual leaves one by one
+foreach (var field in passportData)
+{
+    merkleTree.AddJsonLeaf(field.Key, field.Value);
+}
+
+// Option 3: Create custom leaves with explicit random salts if needed
+foreach (var field in passportData)
+{
+    var salt = MerkleTree.GenerateRandomSalt();
+    merkleTree.AddJsonLeaf(field.Key, field.Value, salt);  
+}
 ```
 
 ### Creating a Passport with Selective Disclosure
@@ -194,16 +209,8 @@ Predicate<MerkleLeaf> makePrivate = leaf =>
     return false;
 };
 
-// Create JSON options that omit null values
-var options = new JsonSerializerOptions
-{
-    WriteIndented = true,
-    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-};
-
 // Serialize the tree with selective disclosure
-string jsonWithPrivacy = merkleTree.ToJson(MerkleTree.ComputeSha256Hash, makePrivate, options);
+string jsonWithPrivacy = merkleTree.ToJson(makePrivate);
 ```
 
 ### JSON Output with Selective Disclosure
@@ -215,7 +222,7 @@ The resulting JSON would look like this, with private fields only showing their 
   "leaves": [
     {
       "data": "0x7b22646f63756d656e7454797065223a2270617373706f7274227d",
-      "salt": "0x7f8e7d6c5b4a3210",
+      "salt": "0xa48c12f5e7b943de67c8901f",
       "hash": "0x05e7faf4a47104a39003db687c19c25b1d8178a00573340fa11e93235229e096",
       "contentType": "application/json; charset=utf-8; encoding=hex"
     },
@@ -224,7 +231,7 @@ The resulting JSON would look like this, with private fields only showing their 
     },
     {
       "data": "0x7b22697373756544617465223a22323032302d30312d3031227d",
-      "salt": "0x7f8e7d6c5b4a3210",
+      "salt": "0xdf87a62c31f0e49b5a3c0b42",
       "hash": "0x5495300bdcc7db5422bd9f058affcda66160650cf246a7c3b36f15da8670d5c6",
       "contentType": "application/json; charset=utf-8; encoding=hex"
     },
@@ -253,7 +260,7 @@ var parsedTree = MerkleTree.Parse(jsonWithPrivacy);
 bool isStillValid = parsedTree.VerifySha256Root(); // Should be true
 ```
 
-The verification works because when a leaf is private (has no data or salt), the verification algorithm uses the provided hash value directly.
+The verification works because when a leaf is private (has no data or salt), the verification algorithm uses the provided hash directly.
 
 ### Creating a Proof for a Specific Claim
 
@@ -271,8 +278,8 @@ Predicate<MerkleLeaf> revealOnlyDateOfBirth = leaf =>
     return true; // Make everything else private
 };
 
-// Create the proof
-string ageProof = merkleTree.ToJson(MerkleTree.ComputeSha256Hash, revealOnlyDateOfBirth, options);
+// Create the proof with selective disclosure
+string ageProof = merkleTree.ToJson(revealOnlyDateOfBirth);
 ```
 
 ## Conclusion

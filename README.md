@@ -14,7 +14,7 @@ dotnet add package Evoq.Blockchain
 - Common blockchain data structures
 - Utility methods for blockchain operations
 - Framework-agnostic design (works with any blockchain implementation)
-- [Merkle trees with selective disclosure](./docs/merkle/selective-disclosure.md)
+- [Merkle trees with selective disclosure and automatic random salts](./docs/merkle/selective-disclosure.md)
 
 ## Documentation
 
@@ -22,6 +22,32 @@ Comprehensive documentation is available in the [docs directory](./docs/):
 
 - [Merkle Tree Implementation](./docs/merkle/README.md)
   - [Selective Disclosure in Merkle Trees](./docs/merkle/selective-disclosure.md) (includes complete examples)
+
+## Quick Start
+
+```csharp
+// Create a Merkle tree
+var tree = new MerkleTree();
+
+// Add leaves with automatic random salts
+var data = new Dictionary<string, object?>
+{
+    { "name", "John" },
+    { "age", 30 },
+    { "ssn", "123-45-6789" }
+};
+tree.AddJsonLeaves(data);
+
+// Compute the root hash
+tree.RecomputeSha256Root();
+
+// Create a selective disclosure version (hiding sensitive data)
+Predicate<MerkleLeaf> privateSsn = leaf => 
+    leaf.TryReadText(out string text) && text.Contains("ssn");
+
+// Convert to JSON with selective disclosure
+string json = tree.ToJson(privateSsn);
+```
 
 ## Target Frameworks
 
@@ -31,12 +57,6 @@ This package targets .NET Standard 2.0 for maximum compatibility across:
 - .NET Core 2.0+
 - Xamarin
 - Unity
-
-## Usage
-
-```
-// Example usage will be added as features are implemented
-```
 
 ## Building
 

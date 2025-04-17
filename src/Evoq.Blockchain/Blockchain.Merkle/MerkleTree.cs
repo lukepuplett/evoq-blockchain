@@ -59,37 +59,46 @@ public class MerkleTree
     //
 
     /// <summary>
-    /// Adds a set of leaves to the Merkle tree using the same salt and hash function.
+    /// Adds a set of leaves to the Merkle tree, each with their own unique salt using the SHA-256 hash function.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Each key-value pair in the dictionary is added as a leaf with the data being the JSON representation
-    /// of the key-value pair. For example, if the dictionary contains a single key-value pair {"name": "John"},
-    /// then a single leaf will be added with the data "{\"name\":\"John\"}" and the leaf will have the content type
-    /// "application/json; charset=utf-8".
+    /// Each JsonLeafData entry represents a key-value pair with its own unique salt. The data for each leaf
+    /// will be the JSON representation of the key-value pair.
     /// </para>
     /// <para>
-    /// If the dictionary contains multiple key-value pairs, each pair will be added as a separate leaf.
-    /// </para>
-    /// <para>
-    /// This method is especially useful for turning a dictionary into a Merkle tree containing versatile JSON
-    /// key-value pairs.
+    /// For example, if an entry has Key="name" and Value="John", then a leaf will be added with 
+    /// the data "{\"name\":\"John\"}" and the leaf will have the content type "application/json; charset=utf-8".
     /// </para>
     /// </remarks>
-    /// <param name="keyValues">The JSON object to add to the leaves.</param>
-    /// <param name="salt">The salt to add to the leaves.</param>
-    /// <param name="hashFunction">The hash function to use for the leaves.</param>
-    /// <returns>The added leaves.</returns>
-    public IReadOnlyList<MerkleLeaf> AddJsonLeaves(IDictionary<string, object?> keyValues, Hex salt, HashFunction hashFunction)
+    /// <param name="keyValues">Dictionary of key-value pairs to add as leaves.</param>
+    public void AddJsonLeaves(Dictionary<string, object?> keyValues)
     {
-        var leaves = new List<MerkleLeaf>();
+        var leaves = keyValues.Select(kvp => MerkleLeaf.FromJsonValue(kvp.Key, kvp.Value));
 
-        foreach (var kvp in keyValues)
+        this.AddJsonLeaves(leaves);
+    }
+
+    /// <summary>
+    /// Adds a set of leaves to the Merkle tree, each with their own unique salt.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each JsonLeafData entry represents a key-value pair with its own unique salt. The data for each leaf
+    /// will be the JSON representation of the key-value pair.
+    /// </para>
+    /// <para>
+    /// For example, if an entry has Key="name" and Value="John", then a leaf will be added with 
+    /// the data "{\"name\":\"John\"}" and the leaf will have the content type "application/json; charset=utf-8".
+    /// </para>
+    /// </remarks>
+    /// <param name="leafEntries">Collection of leaf entries, each with its own salt.</param>
+    public void AddJsonLeaves(IEnumerable<MerkleLeaf> leafEntries)
+    {
+        foreach (var leaf in leafEntries)
         {
-            leaves.Add(AddJsonLeaf(kvp.Key, kvp.Value, salt, hashFunction));
+            this.AddLeaf(leaf);
         }
-
-        return leaves;
     }
 
     /// <summary>
@@ -103,7 +112,23 @@ public class MerkleTree
     public MerkleLeaf AddJsonLeaf(string fieldName, object? fieldValue, Hex salt, HashFunction hashFunction)
     {
         var leaf = MerkleLeaf.FromJsonValue(fieldName, fieldValue, salt, hashFunction);
-        ((List<MerkleLeaf>)this.Leaves).Add(leaf);
+
+        this.AddLeaf(leaf);
+
+        return leaf;
+    }
+
+    /// <summary>
+    /// Adds a new leaf to the Merkle tree.
+    /// </summary>
+    /// <param name="data">The data to add to the leaf.</param>
+    /// <param name="contentType">The content type of the leaf.</param>
+    /// <returns>The added leaf.</returns>
+    public MerkleLeaf AddLeaf(Hex data, string contentType)
+    {
+        var leaf = MerkleLeaf.FromData(contentType, data);
+
+        this.AddLeaf(leaf);
 
         return leaf;
     }
@@ -120,9 +145,18 @@ public class MerkleTree
     {
         var leaf = MerkleLeaf.FromData(contentType, data, salt, hashFunction);
 
-        ((List<MerkleLeaf>)this.Leaves).Add(leaf);
+        this.AddLeaf(leaf);
 
         return leaf;
+    }
+
+    /// <summary>
+    /// Adds a new leaf to the Merkle tree.
+    /// </summary>
+    /// <param name="leaf">The leaf to add.</param>
+    public void AddLeaf(MerkleLeaf leaf)
+    {
+        ((List<MerkleLeaf>)this.Leaves).Add(leaf);
     }
 
     /// <summary>
@@ -402,4 +436,21 @@ public class MerkleTree
             }
         };
     }
+
+    /// <summary>
+    /// Generates a cryptographically secure random salt.
+    /// </summary>
+    /// <param name="length">Length of the salt in bytes. Default is 16 bytes (128 bits).</param>
+    /// <returns>A hex-encoded random salt.</returns>
+    public static Hex GenerateRandomSalt(int length = 16)
+    {
+        byte[] saltBytes = new byte[length];
+        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(saltBytes);
+        }
+        return new Hex(saltBytes);
+    }
+
+
 }

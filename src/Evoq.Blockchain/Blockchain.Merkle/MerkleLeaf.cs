@@ -66,6 +66,17 @@ public class MerkleLeaf
     //
 
     /// <summary>
+    /// Creates a new MerkleLeaf from the given data using a random salt and SHA-256 hash function.
+    /// </summary>
+    /// <param name="contentType">The MIME content type of the data, including encoding information if applicable.</param>
+    /// <param name="data">The data contained in the leaf.</param>
+    /// <returns>A new MerkleLeaf with the specified content type.</returns>
+    public static MerkleLeaf FromData(string contentType, Hex data)
+    {
+        return FromData(contentType, data, MerkleTree.GenerateRandomSalt(), MerkleTree.ComputeSha256Hash);
+    }
+
+    /// <summary>
     /// Creates a new MerkleLeaf from the given data, salt, hash function, and content metadata.
     /// </summary>
     /// <param name="contentType">The MIME content type of the data, including encoding information if applicable.</param>
@@ -78,6 +89,17 @@ public class MerkleLeaf
         var hash = hashFunction(Hex.Concat(data, salt).ToByteArray());
 
         return new MerkleLeaf(contentType, data, salt, hash);
+    }
+
+    /// <summary>
+    /// Creates a new MerkleLeaf from the given field name and field value using a random salt and SHA-256 hash function.
+    /// </summary>
+    /// <param name="fieldName">The name of the field to store in the leaf.</param>
+    /// <param name="fieldValue">The value of the field to store in the leaf.</param>
+    /// <returns>A new MerkleLeaf with "application/json; charset=utf-8" content type.</returns>
+    public static MerkleLeaf FromJsonValue(string fieldName, object? fieldValue)
+    {
+        return FromJsonValue(fieldName, fieldValue, MerkleTree.GenerateRandomSalt(), MerkleTree.ComputeSha256Hash);
     }
 
     /// <summary>
