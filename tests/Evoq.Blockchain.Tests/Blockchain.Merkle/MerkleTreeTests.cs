@@ -61,60 +61,64 @@ public class MerkleTreeTests
     [TestMethod]
     public void Parse_AndToJson_ShouldRoundtripCorrectly()
     {
-        // Arrange
-        string originalJson = @"{
-            ""leaves"": [
-                {
-                    ""data"": ""data1"",
-                    ""salt"": ""0xaabbcc"",
-                    ""hash"": ""0x1234567890abcdef"",
-                    ""contentType"": ""text/plain; charset=utf-8""
-                },
-                {
-                    ""data"": ""data2"",
-                    ""salt"": ""0xddeeff"",
-                    ""hash"": ""0xabcdef1234567890"",
-                    ""contentType"": ""application/json; charset=utf-8""
-                }
-            ],
-            ""root"": ""0xc5185f0d2dfb9f5b4079ecaaac77a48cbe6758197333528d02f070e006420c79"",
-            ""metadata"": {
-                ""hashAlgorithm"": ""sha256"",
-                ""version"": ""1.0""
-            }
-        }";
+        // Create a tree with valid leaves and hashes
+        var tree = new MerkleTree("1.0");
 
-        // Act
-        var originalTree = MerkleTree.Parse(originalJson);
-        string roundtrippedJson = originalTree.ToJson();
+        // Add two leaves with predefined salts
+        var leaf1 = tree.AddLeaf(
+            new Hex(System.Text.Encoding.UTF8.GetBytes("data1")),
+            Hex.Parse("0xaabbcc"),
+            "text/plain; charset=utf-8",
+            MerkleTree.ComputeSha256Hash);
+
+        var leaf2 = tree.AddLeaf(
+            new Hex(System.Text.Encoding.UTF8.GetBytes("data2")),
+            Hex.Parse("0xddeeff"),
+            "application/json; charset=utf-8",
+            MerkleTree.ComputeSha256Hash);
+
+        // Compute the root hash
+        tree.RecomputeSha256Root();
+
+        // Convert to JSON
+        string json = tree.ToJson();
+
+        // Parse the JSON back to a tree
+        var parsedTree = MerkleTree.Parse(json);
+
+        // Convert the parsed tree back to JSON (should verify and succeed)
+        string roundtrippedJson = parsedTree.ToJson();
+
+        // Parse the roundtripped JSON
         var roundtrippedTree = MerkleTree.Parse(roundtrippedJson);
 
-        // Assert - Compare trees rather than exact JSON
-        Assert.AreEqual(originalTree.Root, roundtrippedTree.Root);
-        Assert.AreEqual(originalTree.Metadata.HashAlgorithm, roundtrippedTree.Metadata.HashAlgorithm);
-        Assert.AreEqual(originalTree.Metadata.Version, roundtrippedTree.Metadata.Version);
-        Assert.AreEqual(originalTree.Leaves.Count, roundtrippedTree.Leaves.Count);
+        // Assert - Compare trees
+        Assert.AreEqual(tree.Root, parsedTree.Root);
+        Assert.AreEqual(parsedTree.Root, roundtrippedTree.Root);
+        Assert.AreEqual(tree.Metadata.HashAlgorithm, parsedTree.Metadata.HashAlgorithm);
+        Assert.AreEqual(tree.Metadata.Version, parsedTree.Metadata.Version);
+        Assert.AreEqual(tree.Leaves.Count, parsedTree.Leaves.Count);
 
         // Compare leaves
-        for (int i = 0; i < originalTree.Leaves.Count; i++)
+        for (int i = 0; i < tree.Leaves.Count; i++)
         {
-            Assert.AreEqual(originalTree.Leaves[i].Hash, roundtrippedTree.Leaves[i].Hash);
-            Assert.AreEqual(originalTree.Leaves[i].Salt, roundtrippedTree.Leaves[i].Salt);
-            Assert.AreEqual(originalTree.Leaves[i].ContentType, roundtrippedTree.Leaves[i].ContentType);
+            Assert.AreEqual(tree.Leaves[i].Hash, parsedTree.Leaves[i].Hash);
+            Assert.AreEqual(tree.Leaves[i].Salt, parsedTree.Leaves[i].Salt);
+            Assert.AreEqual(tree.Leaves[i].ContentType, parsedTree.Leaves[i].ContentType);
 
-            // Compare actual data bytes rather than serialized format
+            // Compare actual data bytes
             CollectionAssert.AreEqual(
-                originalTree.Leaves[i].Data.ToByteArray(),
-                roundtrippedTree.Leaves[i].Data.ToByteArray());
+                tree.Leaves[i].Data.ToByteArray(),
+                parsedTree.Leaves[i].Data.ToByteArray());
 
             // Verify that TryReadText still works correctly
-            bool originalCanReadText = originalTree.Leaves[i].TryReadText(out string originalText);
-            bool roundtrippedCanReadText = roundtrippedTree.Leaves[i].TryReadText(out string roundtrippedText);
+            bool originalCanReadText = tree.Leaves[i].TryReadText(out string originalText);
+            bool parsedCanReadText = parsedTree.Leaves[i].TryReadText(out string parsedText);
 
-            Assert.AreEqual(originalCanReadText, roundtrippedCanReadText);
+            Assert.AreEqual(originalCanReadText, parsedCanReadText);
             if (originalCanReadText)
             {
-                Assert.AreEqual(originalText, roundtrippedText);
+                Assert.AreEqual(originalText, parsedText);
             }
         }
     }
@@ -563,7 +567,43 @@ public class MerkleTreeTests
         Assert.IsTrue(parsedTree.VerifySha256Root(), "Parsed tree from JSON with private leaves should verify");
     }
 
+    [TestMethod]
+    public void VerifyRoot_ShouldDetectTamperedLeafData()
+    {
+        // Arrange - Create a merkle tree with some data
+        var tree = new MerkleTree();
+        tree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        tree.AddJsonLeaf("age", 30, Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+        tree.RecomputeSha256Root();
+
+        // Serialize to JSON
+        string json = tree.ToJson();
+
+        // Act - Create tampered JSON by replacing the hex-encoded leaf data
+        // First, let's create the tampered data
+        string originalContent = "{\"name\":\"John Doe\"}";
+        string tamperedContent = "{\"name\":\"Jane Doe\"}";
+
+        // Convert to hex representations
+        string originalHex = BytesToHexString(System.Text.Encoding.UTF8.GetBytes(originalContent));
+        string tamperedHex = BytesToHexString(System.Text.Encoding.UTF8.GetBytes(tamperedContent));
+
+        // Replace in the JSON
+        string tamperedJson = json.Replace(originalHex, tamperedHex);
+
+        // Parse the tampered JSON back into a tree
+        var parsedTree = MerkleTree.Parse(tamperedJson);
+
+        // Assert - Verification should fail, detecting the tampering
+        Assert.IsFalse(parsedTree.VerifySha256Root(), "Tree verification should detect tampered leaf data");
+    }
+
     //
+
+    private static string BytesToHexString(byte[] bytes)
+    {
+        return "0x" + BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
+    }
 
     private static Hex JsonToHex(string json)
     {

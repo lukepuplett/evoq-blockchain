@@ -315,7 +315,26 @@ public class MerkleTree
             throw new InvalidOperationException("Cannot compute root from empty tree");
         }
 
-        return ComputeMerkleRoot(Leaves.Select(l => l.Hash).ToList(), hashFunction);
+        // Compute hashes from the leaf data and salt for non-private leaves
+        // to ensure that we detect tampered data during verification
+
+        List<Hex> hashes = new List<Hex>();
+        foreach (var leaf in Leaves)
+        {
+            if (leaf.IsPrivate)
+            {
+                // For private leaves, use the stored hash
+                hashes.Add(leaf.Hash);
+            }
+            else
+            {
+                // For non-private leaves, recompute the hash from data and salt
+                var computedHash = hashFunction(Hex.Concat(leaf.Data, leaf.Salt).ToByteArray());
+                hashes.Add(computedHash);
+            }
+        }
+
+        return ComputeMerkleRoot(hashes, hashFunction);
     }
 
     private static Hex ComputeMerkleRoot(List<Hex> hashes, HashFunction hashFunction)
