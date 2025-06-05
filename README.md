@@ -38,7 +38,7 @@ var data = new Dictionary<string, object?>
 };
 tree.AddJsonLeaves(data);
 
-// Compute the root hash
+// Compute the root hash (required before serialization)
 tree.RecomputeSha256Root();
 
 // Create a selective disclosure version (hiding sensitive data)
@@ -47,6 +47,104 @@ Predicate<MerkleLeaf> privateSsn = leaf =>
 
 // Convert to JSON with selective disclosure
 string json = tree.ToJson(privateSsn);
+
+// Parse and verify the tree
+var parsedTree = MerkleTree.Parse(json);
+bool isValid = parsedTree.VerifyRoot(); // Automatically uses hash function from metadata
+```
+
+### Merkle Tree Features
+
+#### Automatic Hash Function Selection
+The tree automatically selects the appropriate hash function based on the metadata:
+```csharp
+// Verify using the hash function specified in metadata
+bool isValid = tree.VerifyRoot();
+
+// Or explicitly specify a hash function
+bool isValid = tree.VerifyRoot(myCustomHashFunction);
+```
+
+#### Root Hash Computation
+The root hash must be computed before serialization:
+```csharp
+// This will throw InvalidRootException if root hasn't been computed
+tree.ToJson();
+
+// Always compute the root first
+tree.RecomputeSha256Root();
+tree.ToJson(); // Now works
+```
+
+#### Error Handling
+The library provides clear error messages for common issues:
+```csharp
+try {
+    tree.VerifyRoot();
+} catch (NotSupportedException ex) {
+    // Error message explains how to use custom hash functions
+    Console.WriteLine(ex.Message);
+}
+```
+
+#### Custom Hash Functions
+You can implement custom hash functions and select them based on the tree's metadata:
+```csharp
+// Define a custom hash function
+Hex ComputeReverseSha256Hash(byte[] data)
+{
+    // Reverse the input bytes
+    byte[] reversed = new byte[data.Length];
+    Array.Copy(data, reversed, data.Length);
+    Array.Reverse(reversed);
+
+    // Hash the reversed bytes
+    using var sha256 = SHA256.Create();
+    return new Hex(sha256.ComputeHash(reversed));
+}
+
+// Create a hash function selector
+HashFunction SelectHashFunction(MerkleTree tree)
+{
+    return tree.Metadata.HashAlgorithm switch
+    {
+        "sha256" => MerkleTree.ComputeSha256Hash,
+        "sha256-reverse" => ComputeReverseSha256Hash,
+        _ => throw new NotSupportedException(
+            $"Hash algorithm '{tree.Metadata.HashAlgorithm}' is not supported. " +
+            "Please implement a custom hash function for this algorithm.")
+    };
+}
+
+// Use the selector to get the right hash function
+var hashFunction = SelectHashFunction(tree);
+bool isValid = tree.VerifyRoot(hashFunction);
+```
+
+#### Version Support
+The parser automatically detects the version format of the JSON. The library currently defaults to v1.0 format, but also supports the newer v2.0 format which uses JWT-style headers:
+
+```csharp
+// v1.0 format (current default, uses "metadata" property)
+var v1Json = @"{
+    ""metadata"": { ""hashAlgorithm"": ""sha256"", ""version"": ""1.0"" },
+    ""leaves"": [...],
+    ""root"": ""...""
+}";
+
+// v2.0 format (JWT-style, uses "header" property with standardized values)
+var v2Json = @"{
+    ""header"": { 
+        ""alg"": ""SHA256"",           // Standardized algorithm name
+        ""typ"": ""MerkleTree+2.0""    // JWT-style type identifier
+    },
+    ""leaves"": [...],
+    ""root"": ""...""
+}";
+
+// Both formats are automatically detected
+var tree = MerkleTree.Parse(v1Json); // Works with v1.0
+var tree2 = MerkleTree.Parse(v2Json); // Works with v2.0
 ```
 
 ## Target Frameworks

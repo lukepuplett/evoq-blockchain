@@ -5,12 +5,12 @@ using System.Collections.Generic;
 /// <summary>
 /// DTOs (Data Transfer Objects) for Merkle tree serialization and deserialization.
 /// </summary>
-internal record struct MerkleTreeDto
+internal record struct MerkleTreeV1Dto
 {
     /// <summary>
     /// Gets or sets the collection of leaf nodes in the Merkle tree.
     /// </summary>
-    public List<MerkleLeafDto>? Leaves { get; set; }
+    public List<MerkleTreeV1LeafDto>? Leaves { get; set; }
 
     /// <summary>
     /// Gets or sets the root hash of the Merkle tree.
@@ -20,13 +20,13 @@ internal record struct MerkleTreeDto
     /// <summary>
     /// Gets or sets metadata about the Merkle tree.
     /// </summary>
-    public MerkleMetadataDto? Metadata { get; set; }
+    public MerkleTreeV1MetadataDto? Metadata { get; set; }
 }
 
 /// <summary>
 /// DTO (Data Transfer Object) for MerkleLeaf serialization and deserialization.
 /// </summary>
-internal record struct MerkleLeafDto
+internal record struct MerkleTreeV1LeafDto
 {
     /// <summary>
     /// Gets or sets the data contained in the leaf.
@@ -54,7 +54,7 @@ internal record struct MerkleLeafDto
 /// <summary>
 /// DTO (Data Transfer Object) for MerkleMetadata serialization and deserialization.
 /// </summary>
-internal record struct MerkleMetadataDto
+internal record struct MerkleTreeV1MetadataDto
 {
     /// <summary>
     /// Gets or sets the hash algorithm used in the Merkle tree.

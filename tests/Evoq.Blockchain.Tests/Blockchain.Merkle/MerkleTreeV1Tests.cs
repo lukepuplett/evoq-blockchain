@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using Evoq.Blockchain;
 using Evoq.Blockchain.Merkle;
 
 namespace Evoq.Blockchain.Tests.Merkle;
 
 [TestClass]
-public class MerkleTreeTests
+public class MerkleV1TreeTests
 {
     [TestMethod]
     public void Parse_ValidJson_ShouldDeserializeCorrectly()
@@ -644,6 +643,79 @@ public class MerkleTreeTests
 
         // Verify the twice-parsed tree still validates
         Assert.IsTrue(secondParsedTree.VerifySha256Root(), "Tree after second roundtrip should still verify");
+    }
+
+    [TestMethod]
+    public void VerifyRoot_WithRoundtrippedTree_ShouldVerifyCorrectly()
+    {
+        // Arrange - Create a tree with some data
+        var tree = new MerkleTree("1.0");
+        tree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        tree.AddJsonLeaf("age", 30, Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+        tree.RecomputeSha256Root();
+
+        // Act - Roundtrip through JSON
+        string json = tree.ToJson();
+        var parsedTree = MerkleTree.Parse(json);
+
+        // Assert - Verify using the new method that automatically selects the hash function
+        Assert.IsTrue(parsedTree.VerifyRoot(), "Tree should verify with automatic hash function selection");
+
+        // Verify the metadata is preserved
+        Assert.AreEqual(MerkleTreeHashAlgorithmStrings.Sha256, parsedTree.Metadata.HashAlgorithm);
+        Assert.AreEqual("1.0", parsedTree.Metadata.Version);
+    }
+
+    [TestMethod]
+    public void VerifyRoot_WithUnsupportedAlgorithm_ShouldThrowWithHelpfulMessage()
+    {
+        // Arrange - Create a tree with an unsupported algorithm in metadata
+        var tree = new MerkleTree("1.0");
+        tree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        tree.RecomputeRoot(MerkleTree.ComputeSha256Hash, "unsupported-algo");
+
+        // Act & Assert
+        var ex = Assert.ThrowsException<NotSupportedException>(() => tree.VerifyRoot());
+        Assert.IsTrue(ex.Message.Contains("unsupported-algo"), "Error message should mention the unsupported algorithm");
+        Assert.IsTrue(ex.Message.Contains("VerifyRoot(HashFunction)"), "Error message should suggest using VerifyRoot(HashFunction)");
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(InvalidRootException))]
+    public void ToJson_WithoutComputedRoot_ShouldThrowInvalidRootException()
+    {
+        // Arrange - Create a tree but don't compute the root
+        var tree = new MerkleTree("1.0");
+        tree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        tree.AddJsonLeaf("age", 30, Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+
+        // Act - Try to serialize without computing root
+        tree.ToJson();
+
+        // Assert is handled by ExpectedException
+    }
+
+    [TestMethod]
+    public void RoundTrip_ShouldPreserveVersion()
+    {
+        // Arrange - Create a v1.0 tree
+        var tree = new MerkleTree("1.0");
+        tree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        tree.RecomputeSha256Root();
+
+        // Act - Roundtrip through JSON
+        string json = tree.ToJson();
+        var parsedTree = MerkleTree.Parse(json);
+        string roundtrippedJson = parsedTree.ToJson();
+
+        // Assert - Verify version is preserved
+        var jsonDoc = JsonDocument.Parse(roundtrippedJson);
+        var root = jsonDoc.RootElement;
+
+        // Should still be v1.0 format
+        Assert.IsTrue(root.TryGetProperty("metadata", out var metadata));
+        Assert.IsFalse(root.TryGetProperty("header", out _));
+        Assert.AreEqual("1.0", metadata.GetProperty("version").GetString());
     }
 
     //
