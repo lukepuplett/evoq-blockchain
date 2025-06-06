@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Evoq.Blockchain;
 
@@ -253,7 +254,8 @@ public class MerkleTree
         {
             var options = new JsonSerializerOptions
             {
-                PropertyNameCaseInsensitive = true
+                PropertyNameCaseInsensitive = true,
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
 
             // First parse as JsonDocument to detect version
@@ -317,7 +319,8 @@ public class MerkleTree
         options ??= new JsonSerializerOptions
         {
             WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
         if (Metadata.Version == MerkleTreeVersionStrings.V1_0)

@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Text.Json;
 using Evoq.Blockchain.Merkle;
@@ -73,5 +74,27 @@ public class MerkleV2TreeTests
         Assert.IsFalse(root.TryGetProperty("metadata", out _));
         Assert.AreEqual(MerkleTreeVersionStrings.V2_0, header.GetProperty("typ").GetString());
         Assert.AreEqual(MerkleTreeHashAlgorithmStrings.Sha256, header.GetProperty("alg").GetString());
+    }
+
+    [TestMethod]
+    public void VersionString_ShouldNotBeEscapedInJson()
+    {
+        // Arrange - Create a v2.0 tree
+        var tree = new MerkleTree(MerkleTreeVersionStrings.V2_0);
+        tree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        tree.RecomputeSha256Root();
+
+        // Act - Convert to JSON
+        string json = tree.ToJson();
+
+        // Assert - Verify the version string is not escaped
+        var jsonDoc = JsonDocument.Parse(json);
+        var header = jsonDoc.RootElement.GetProperty("header");
+        var typ = header.GetProperty("typ").GetString();
+
+        Assert.AreEqual(MerkleTreeVersionStrings.V2_0, typ,
+            "Version string should not be escaped in JSON output");
+        Assert.IsFalse(json.Contains("\\u002B"),
+            "Plus sign should not be escaped as Unicode in JSON output");
     }
 }

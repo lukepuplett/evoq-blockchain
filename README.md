@@ -147,6 +147,8 @@ var tree = MerkleTree.Parse(v1Json); // Works with v1.0
 var tree2 = MerkleTree.Parse(v2Json); // Works with v2.0
 ```
 
+> **Note:** The library uses `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` to ensure special characters in version strings (like '+' in "MerkleTree+2.0") are not escaped in the JSON output. This is particularly important for JWT-style type identifiers in v2.0 format.
+
 ## Target Frameworks
 
 This package targets .NET Standard 2.0 for maximum compatibility across:
