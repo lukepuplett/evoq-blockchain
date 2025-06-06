@@ -405,6 +405,9 @@ public class MerkleTree
 
         if (hashes.Count == 1)
         {
+            // Verified: For a single leaf, we return its hash directly as the root.
+            // This is correct because the hash parameter already contains the hashed leaf value.
+
             return hashes[0];
         }
 
@@ -415,14 +418,12 @@ public class MerkleTree
             if (i + 1 < hashes.Count)
             {
                 // Concatenate the two hashes and hash them together
-
                 var combinedBytes = ConcatenateHashes(hashes[i], hashes[i + 1]); // left and right
                 nextLevel.Add(hashFunction(combinedBytes));
             }
             else
             {
                 // Odd number of hashes, duplicate the last one
-
                 var combinedBytes = ConcatenateHashes(hashes[i], hashes[i]); // duplicate the last one
                 nextLevel.Add(hashFunction(combinedBytes));
             }
