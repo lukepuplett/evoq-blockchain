@@ -201,6 +201,72 @@ export NUGET_API_KEY="your-nuget-api-key"
 ./publish.sh
 ```
 
+## Shipping a Release
+
+When preparing a new release, follow these steps to ensure quality and consistency:
+
+1. **Version Management**
+   - Update version in `src/Evoq.Blockchain/Evoq.Blockchain.csproj`
+   - Follow semantic versioning (MAJOR.MINOR.PATCH)
+   - Create git tag matching version (e.g., `v1.4.0`)
+
+2. **Code Quality**
+   - Run `./build.sh` to verify all tests pass
+   - Check for and address any critical warnings
+   - Ensure all public APIs are documented
+   - Remove any TODO comments
+
+3. **Documentation**
+   - Update README.md with new features/examples
+   - Verify API documentation is complete
+   - Document any breaking changes
+   - Add examples for new functionality
+
+4. **Git Hygiene**
+   - Commit all changes with conventional commit messages
+   - Create and push version tag
+   - Verify no sensitive data in commits
+   - Ensure clean working directory
+
+5. **Build & Test**
+   - Run full build in Release mode
+   - Verify all 231+ tests pass
+   - Check NuGet package builds successfully
+   - Address any build warnings
+
+6. **Release Artifacts**
+   - Verify NuGet package in `./artifacts`
+   - Check package version matches project
+   - Validate package contents
+   - Review package metadata
+
+7. **Pre-Release Checklist**
+   - Review changes since last release
+   - Verify backward compatibility
+   - Check security implications
+   - Review performance impact
+
+8. **Post-Release Tasks**
+   - Create GitHub release
+   - Write release notes
+   - Publish to NuGet
+   - Update documentation if needed
+
+Example release workflow:
+```bash
+# 1. Update version in .csproj
+# 2. Build and test
+./build.sh
+
+# 3. Create and push tag
+git tag -a v1.4.0 -m "Version 1.4.0 - Add private leaves support"
+git push origin v1.4.0
+
+# 4. Create GitHub release and publish
+export NUGET_API_KEY="your-nuget-api-key"
+./publish.sh
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
