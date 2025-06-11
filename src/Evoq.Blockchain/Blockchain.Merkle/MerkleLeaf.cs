@@ -1,10 +1,7 @@
-namespace Evoq.Blockchain.Merkle;
-
-using System;
 using System.Collections.Generic;
 using System.Text.Json;
-using Evoq.Blockchain;
 
+namespace Evoq.Blockchain.Merkle;
 /// <summary>
 /// Represents a leaf node in a Merkle tree.
 /// </summary>
@@ -19,9 +16,21 @@ public class MerkleLeaf
     /// <param name="contentType">The MIME content type of the data, including encoding information if applicable.</param>
     public MerkleLeaf(string contentType, Hex data, Hex salt, Hex hash)
     {
-        this.ContentType = contentType;
+        this.ContentType = contentType ?? string.Empty;
         this.Data = data;
         this.Salt = salt;
+        this.Hash = hash;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the MerkleLeaf class for a private leaf that only contains a hash.
+    /// </summary>
+    /// <param name="hash">The hash of the leaf.</param>
+    public MerkleLeaf(Hex hash)
+    {
+        this.ContentType = string.Empty;
+        this.Data = Hex.Empty;
+        this.Salt = Hex.Empty;
         this.Hash = hash;
     }
 

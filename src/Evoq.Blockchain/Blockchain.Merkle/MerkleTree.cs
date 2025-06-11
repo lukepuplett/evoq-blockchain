@@ -152,6 +152,18 @@ public class MerkleTree
     }
 
     /// <summary>
+    /// Adds a new private leaf to the Merkle tree that only contains a hash.
+    /// </summary>
+    /// <param name="hash">The hash of the leaf.</param>
+    /// <returns>The added leaf.</returns>
+    public MerkleLeaf AddPrivateLeaf(Hex hash)
+    {
+        var leaf = new MerkleLeaf(hash);
+        this.AddLeaf(leaf);
+        return leaf;
+    }
+
+    /// <summary>
     /// Verifies that the current root matches the computed root from the leaves.
     /// </summary>
     /// <param name="hashFunction">The hash function to use for verification.</param>
@@ -303,7 +315,7 @@ public class MerkleTree
     /// Converts the MerkleTree object to its JSON string representation after verifying the root.
     /// </summary>
     /// <param name="hashFunction">The hash function to use for verification.</param>
-    /// <param name="makePrivate">A predicate to determine if a leaf should be made private.</param>
+    /// <param name="makePrivate">A predicate to determine if a leaf should be made private, in addition to the leaf's own IsPrivate property.</param>
     /// <param name="options">JSON serializer options to customize the output.</param>
     /// <returns>A JSON string representation of the MerkleTree object.</returns>
     /// <exception cref="InvalidRootException">Thrown if the root verification fails.</exception>
@@ -320,17 +332,21 @@ public class MerkleTree
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         };
+
+        // Combine the leaf's IsPrivate property with any additional predicate
+        Predicate<MerkleLeaf> combinedPredicate = leaf => leaf.IsPrivate || (makePrivate?.Invoke(leaf) ?? false);
 
         if (Metadata.Version == MerkleTreeVersionStrings.V1_0)
         {
-            MerkleTreeV1Dto v1 = this.ToV1Dto(makePrivate ?? (leaf => false));
+            MerkleTreeV1Dto v1 = this.ToV1Dto(combinedPredicate);
             return JsonSerializer.Serialize(v1, options);
         }
         else if (Metadata.Version == MerkleTreeVersionStrings.V2_0)
         {
-            MerkleTreeV2Dto v2 = this.ToV2Dto(makePrivate ?? (leaf => false));
+            MerkleTreeV2Dto v2 = this.ToV2Dto(combinedPredicate);
             return JsonSerializer.Serialize(v2, options);
         }
         else

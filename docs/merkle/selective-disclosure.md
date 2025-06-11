@@ -282,6 +282,33 @@ Predicate<MerkleLeaf> revealOnlyDateOfBirth = leaf =>
 string ageProof = merkleTree.ToJson(revealOnlyDateOfBirth);
 ```
 
+### Creating Private Leaves
+
+There are two ways to create private leaves in a Merkle tree:
+
+1. **Using AddPrivateLeaf**: Create a leaf that is private from the start:
+```csharp
+// Create a tree with a private leaf
+var tree = new MerkleTree();
+var hash = Hex.Parse("0x1234567890abcdef");
+var privateLeaf = tree.AddPrivateLeaf(hash);
+```
+
+2. **Using Selective Disclosure**: Make existing leaves private during serialization:
+```csharp
+// Create a predicate that makes certain leaves private
+Predicate<MerkleLeaf> makePrivate = leaf =>
+    leaf.TryReadText(out string text) && text.Contains("documentNumber");
+
+// Serialize with selective disclosure
+string json = tree.ToJson(makePrivate);
+```
+
+Both approaches result in leaves that:
+- Only contain their hash in the JSON output
+- Maintain the tree's verifiability
+- Preserve privacy of the leaf's data
+
 ## Conclusion
 
 Our selective disclosure implementation for Merkle trees offers a pragmatic balance between privacy and verifiability. By using a simple predicate-based approach and clean JSON serialization, we've created a solution that's easy to use, efficient to implement, and powerful in its applications.
