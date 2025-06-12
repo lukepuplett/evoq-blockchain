@@ -15,6 +15,31 @@ using Evoq.Blockchain;
 /// A simple Merkle tree which can be assembled manually or parsed from a JSON string. The design forces the user
 /// to verify the root before serializing to JSON, ensuring that the tree is valid before it is saved or exchanged.
 /// If the tree fails verification, an exception can be caught and the tree root can be recomputed from the leaves.
+/// 
+/// Version 3.0 introduces a protected header leaf that provides enhanced security and interoperability:
+/// 
+/// Security Improvements:
+/// - The header leaf is part of the Merkle tree itself, making its contents (algorithm, leaf count, exchange type) 
+///   cryptographically protected by the tree's structure
+/// - Protects against leaf addition/removal attacks by including the exact leaf count
+/// - Prevents single leaf attacks by requiring a header leaf
+/// - Protects against algorithm substitution by including the hash algorithm in the protected header
+/// - Includes the type of data/record being exchanged (e.g., "invoice", "contract", "certificate") to prevent 
+///   mixing different types of records in the same tree
+/// - Uses proper MIME types for structured exchange format
+/// - Performs strict validation of the header leaf during parsing
+/// 
+/// Interoperability Features:
+/// - Uses standard MIME types (application/merkle-exchange-3.0+json) for structured data exchange
+/// - Supports selective disclosure through private leaves and makePrivate predicates
+/// - Enables efficient proof generation with O(log n) hashes for classical Merkle proofs
+/// - Maintains backward compatibility with v1.0 and v2.0 formats
+/// 
+/// Use Cases:
+/// - Selective Disclosure: Reveal specific leaves while keeping others private
+/// - Document Exchange: Exchange structured data with type safety and integrity
+/// - Proof Generation: Generate compact proofs for verification
+/// - Private Storage: Store full structure (data, salts, hashes) for quick proof reissuance
 /// </remarks>
 public class MerkleTree
 {

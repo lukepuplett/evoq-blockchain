@@ -21,10 +21,68 @@ In many verification scenarios, you need to prove only specific attributes (like
 
 Traditional approaches require either:
 1. Revealing the entire document (compromising privacy)
-2. Creating separate trees for each attribute (sacrificing the unified cryptographic binding)
-3. Implementing complex zero-knowledge proofs (adding significant complexity)
+1. Creating separate trees for each attribute (sacrificing the unified cryptographic binding)
+1. Implementing complex zero-knowledge proofs (adding significant complexity)
 
 Our implementation provides a clean, elegant solution to this problem through a technique we call "private leaves" - leaves whose content is withheld while their cryptographic presence is maintained.
+
+## Version 3.0 Security Improvements
+
+Version 3.0 introduces a protected header leaf that significantly enhances security by preventing several critical attacks:
+
+1. **Single Leaf Attack Prevention**
+   - The header leaf forces all valid trees to have at least two leaves
+   - This prevents an attacker from creating a single-leaf tree that matches a known root hash
+   - The header leaf must be valid JSON, making it harder to fake
+
+2. **Leaf Count Protection**
+   - The header leaf contains the exact number of leaves expected
+   - This prevents attackers from adding or removing leaves to find hash collisions
+   - The leaf count is cryptographically protected by being part of the tree structure
+
+3. **Algorithm Protection**
+   - The hash algorithm is included in the protected header leaf
+   - This prevents attackers from switching to weaker algorithms
+   - The algorithm choice is cryptographically bound to the tree structure
+
+4. **Document Type Safety**
+   - The `exchange` field specifies the type of document (e.g., "passport", "invoice")
+   - This prevents mixing different types of records in the same tree
+   - Helps prevent attacks where a proof of one document type is used as another
+
+5. **Metadata Protection**
+   - All critical metadata is stored in the first leaf of the tree
+   - This metadata is cryptographically protected by the tree's structure
+   - Makes it impossible to modify metadata without breaking the tree's integrity
+
+### Security Guarantees
+
+The v3.0 design provides security through two difficult problems for attackers:
+
+1. **Finding Private Leaf Hashes**
+   - Attackers must find correct hash values for private leaves
+   - These hashes must combine to produce the known root hash
+   - This is computationally infeasible due to the cryptographic properties of the hash function
+
+2. **Finding Data/Salt Combinations**
+   - Attackers must find data and salt combinations that either:
+     - Produce the original hash for a leaf
+     - Or produce a different hash that still solves for the root hash
+   - This is prevented by the use of cryptographically secure random salts
+
+### Processing Requirements
+
+When processing v3.0 trees, verifiers must:
+
+1. Ensure there are at least two leaf nodes
+2. Verify the first leaf contains valid JSON metadata
+3. Validate the algorithm is known, supported, and secure
+4. Confirm the leaf count matches the actual number of leaves
+5. Verify all leaf hashes can be recomputed from their data and salt
+6. Validate data formats and content (e.g., postal codes, dates)
+7. Challenge users to provide details from the original document
+
+This comprehensive validation ensures the tree's integrity and prevents various attacks while maintaining the efficiency of selective disclosure.
 
 ## Important: Security Through Unique Salts
 
@@ -41,6 +99,7 @@ We've implemented a simple yet powerful solution that enables any subset of leav
 2. **Clean Serialization**: Private leaves contain only their hash, omitting data, salt, and content type
 3. **Seamless Verification**: Standard verification algorithms still work with private leaves
 4. **Flexible Privacy Control**: Any combination of leaves can be made private or public
+5. **Efficient Proofs**: Generates compact proofs with O(log n) hashes for verification
 
 ## Implementation Details
 
@@ -95,6 +154,31 @@ This selective disclosure approach is particularly valuable for:
 2. **Credential Validation**: Verify qualifications without exposing all credential details
 3. **Document Attestation**: Cryptographically verify specific document attributes
 4. **Blockchain Applications**: Reduce on-chain data while maintaining verifiability
+5. **Private Storage**: Store full structure (data, salts, hashes) for quick proof reissuance
+
+## Blockchain Attestation
+
+The selective disclosure implementation is designed to work seamlessly with blockchain attestations:
+
+1. **Attestation Process**:
+   - Create a Merkle tree with all required data
+   - Compute and verify the root hash
+   - Attest the root hash on the blockchain
+   - Store or share the complete tree with users
+
+2. **Verification Process**:
+   - Parse the selectively disclosed tree from JSON
+   - Verify the tree's structure and integrity
+   - Compare the tree's root hash with the attested hash on the blockchain
+   - Validate the disclosed data against the attested root
+
+3. **Security Properties**:
+   - The attested root hash provides a tamper-proof record
+   - Selective disclosure maintains the same root hash
+   - The header leaf in v3.0 prevents various attacks
+   - The verification process ensures data integrity
+
+This pattern enables privacy-preserving verification while maintaining the security guarantees of blockchain attestation.
 
 ## Security Considerations
 
@@ -125,6 +209,10 @@ Let's walk through a complete example of implementing selective disclosure with 
 First, we'll create a Merkle tree containing various passport data fields:
 
 ```csharp
+// Create a v3.0 tree for the passport
+var merkleTree = new MerkleTree(MerkleTreeVersionStrings.V3_0);
+merkleTree.Metadata.ExchangeDocumentType = "passport";
+
 // Passport data fields
 var passportData = new Dictionary<string, object?>
 {
@@ -160,8 +248,7 @@ var passportData = new Dictionary<string, object?>
     }
 };
 
-// Create the Merkle tree and add all fields as leaves with automatically generated random salts
-var merkleTree = new MerkleTree();
+// Add all fields as leaves with automatically generated random salts
 merkleTree.AddJsonLeaves(passportData);  // Uses random salts automatically
 
 // Compute the root hash
@@ -241,16 +328,17 @@ The resulting JSON would look like this, with private fields only showing their 
     }
   ],
   "root": "0x42b0557fd2578668da8218367ef9f8f0e233a2a928a979f66c8331fda5d81af8",
-  "metadata": {
-    "hashAlgorithm": "sha256",
-    "version": "1.0"
+  "header": {
+    "typ": "application/merkle-exchange-3.0+json"
   }
 }
 ```
 
+Note that in v3.0, the header leaf (first leaf) contains protected metadata about the tree, including the hash algorithm, leaf count, and document type. This metadata is cryptographically protected by the tree's structure, preventing tampering with critical tree parameters. 
+
 ### Verifying a Tree with Private Leaves
 
-The verification process works the same way with private leaves:
+The verification process works the same way with private leaves, but with enhanced security in v3.0:
 
 ```csharp
 // Parse the selectively disclosed JSON
@@ -260,7 +348,11 @@ var parsedTree = MerkleTree.Parse(jsonWithPrivacy);
 bool isStillValid = parsedTree.VerifySha256Root(); // Should be true
 ```
 
-The verification works because when a leaf is private (has no data or salt), the verification algorithm uses the provided hash directly.
+The verification works because:
+1. When a leaf is private (has no data or salt), the verification algorithm uses the provided hash directly
+2. In v3.0, the header leaf's metadata (algorithm, leaf count, document type) is verified as part of the tree structure
+3. The parser validates that the leaf count matches the actual number of leaves
+4. The hash algorithm specified in the header leaf is used for verification
 
 ### Creating a Proof for a Specific Claim
 
@@ -289,7 +381,7 @@ There are two ways to create private leaves in a Merkle tree:
 1. **Using AddPrivateLeaf**: Create a leaf that is private from the start:
 ```csharp
 // Create a tree with a private leaf
-var tree = new MerkleTree();
+var tree = new MerkleTree(MerkleTreeVersionStrings.V3_0);
 var hash = Hex.Parse("0x1234567890abcdef");
 var privateLeaf = tree.AddPrivateLeaf(hash);
 ```
@@ -308,6 +400,7 @@ Both approaches result in leaves that:
 - Only contain their hash in the JSON output
 - Maintain the tree's verifiability
 - Preserve privacy of the leaf's data
+- In v3.0, are protected by the header leaf's metadata
 
 ## Conclusion
 
@@ -319,5 +412,6 @@ The approach provides:
 2. Clean JSON representation with only the necessary data
 3. Maintained cryptographic verifiability
 4. Simple implementation using predicates
+5. Enhanced security through protected metadata in v3.0
 
 This is particularly valuable for real-world applications where selective disclosure balances privacy with verifiability needs. 
