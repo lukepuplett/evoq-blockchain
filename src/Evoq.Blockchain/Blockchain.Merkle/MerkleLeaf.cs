@@ -95,7 +95,7 @@ public class MerkleLeaf
     /// <returns>A new MerkleLeaf with the specified content type.</returns>
     public static MerkleLeaf FromData(string contentType, Hex data, Hex salt, MerkleTree.HashFunction hashFunction)
     {
-        var hash = hashFunction(Hex.Concat(data, salt).ToByteArray());
+        var hash = UseHashFunction(hashFunction, data, salt);
 
         return new MerkleLeaf(contentType, data, salt, hash);
     }
@@ -128,7 +128,7 @@ public class MerkleLeaf
 
         var json = JsonSerializer.Serialize(jsonObject);
         var data = new Hex(System.Text.Encoding.UTF8.GetBytes(json));
-        var hash = hashFunction(Hex.Concat(data, salt).ToByteArray());
+        var hash = UseHashFunction(hashFunction, data, salt);
 
         return new MerkleLeaf(ContentTypeUtility.CreateJsonUtf8(), data, salt, hash);
     }
@@ -177,5 +177,12 @@ public class MerkleLeaf
         }
 
         return this.Data.ToString();
+    }
+
+    //
+
+    internal static Hex UseHashFunction(MerkleTree.HashFunction hashFunction, Hex data, Hex salt)
+    {
+        return hashFunction(Hex.Concat(data, salt).ToByteArray());
     }
 }

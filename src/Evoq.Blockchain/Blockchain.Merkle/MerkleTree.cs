@@ -19,6 +19,7 @@ using Evoq.Blockchain;
 public class MerkleTree
 {
     // Delegates
+
     /// <summary>
     /// Delegate for hash function implementations to be used with Merkle trees.
     /// </summary>
@@ -26,7 +27,23 @@ public class MerkleTree
     /// <returns>A hex representation of the hash result.</returns>
     public delegate Hex HashFunction(byte[] data);
 
+    // Constructors
+
+    /// <summary>
+    /// Initializes a new instance of the MerkleTree class.
+    /// </summary>
+    public MerkleTree(string version = "1.0", params MerkleLeaf[] leaves)
+    {
+        this.Metadata = new MerkleMetadata
+        {
+            Version = version
+        };
+
+        this.Leaves = leaves.ToList();
+    }
+
     // Public Properties
+
     /// <summary>
     /// Gets the collection of leaf nodes in the Merkle tree.
     /// </summary>
@@ -42,21 +59,12 @@ public class MerkleTree
     /// </summary>
     public MerkleMetadata Metadata { get; private set; } = new MerkleMetadata();
 
-    // Constructors
-    /// <summary>
-    /// Initializes a new instance of the MerkleTree class.
-    /// </summary>
-    public MerkleTree(string version = "1.0", params MerkleLeaf[] leaves)
-    {
-        this.Metadata = new MerkleMetadata
-        {
-            Version = version
-        };
+    // Private Properties
 
-        this.Leaves = leaves.ToList();
-    }
+    private IList<MerkleLeaf> WritableLeaves => (IList<MerkleLeaf>)this.Leaves;
 
     // Public Methods
+
     /// <summary>
     /// Adds a set of leaves to the Merkle tree, each with their own unique salt using the SHA-256 hash function.
     /// </summary>
@@ -148,7 +156,7 @@ public class MerkleTree
     /// <param name="leaf">The leaf to add.</param>
     public void AddLeaf(MerkleLeaf leaf)
     {
-        ((List<MerkleLeaf>)this.Leaves).Add(leaf);
+        this.WritableLeaves.Add(leaf);
     }
 
     /// <summary>
@@ -167,16 +175,36 @@ public class MerkleTree
     /// Verifies that the current root matches the computed root from the leaves.
     /// </summary>
     /// <param name="hashFunction">The hash function to use for verification.</param>
+    /// <param name="computedRoot">The computed root hash.</param>
     /// <returns>True if the verification passes, false otherwise.</returns>
-    public bool VerifyRoot(HashFunction hashFunction)
+    public bool VerifyRoot(HashFunction hashFunction, out Hex computedRoot)
     {
-        if (Leaves.Count == 0)
+        if (this.Leaves.Count == 0)
         {
+            computedRoot = Hex.Empty;
             return this.Root.Equals(Hex.Empty);
         }
 
-        var computedRoot = this.ComputeRootFromLeafHashes(hashFunction);
-        return this.Root.Equals(computedRoot);
+        try
+        {
+            computedRoot = this.ComputeRootFromLeafHashes(hashFunction, false);
+            return this.Root.Equals(computedRoot);
+        }
+        catch (InvalidLeafHashException)
+        {
+            computedRoot = Hex.Empty;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the current root matches the computed root from the leaves.
+    /// </summary>
+    /// <param name="hashFunction">The hash function to use for verification.</param>
+    /// <returns>True if the verification passes, false otherwise.</returns>
+    public bool VerifyRoot(HashFunction hashFunction)
+    {
+        return this.VerifyRoot(hashFunction, out _);
     }
 
     /// <summary>
@@ -187,7 +215,7 @@ public class MerkleTree
     public bool VerifyRoot()
     {
         var hashFunction = GetHashFunctionFromMetadata();
-        return VerifyRoot(hashFunction);
+        return this.VerifyRoot(hashFunction);
     }
 
     /// <summary>
@@ -196,7 +224,7 @@ public class MerkleTree
     /// <returns>True if the verification passes, false otherwise.</returns>
     public bool VerifySha256Root()
     {
-        return VerifyRoot(ComputeSha256Hash);
+        return this.VerifyRoot(ComputeSha256Hash);
     }
 
     /// <summary>
@@ -218,12 +246,8 @@ public class MerkleTree
             throw new InvalidOperationException("Cannot recompute root from empty tree");
         }
 
-        this.Root = ComputeRootFromLeafHashes(hashFunction);
-        this.Metadata = new MerkleMetadata
-        {
-            HashAlgorithm = hashAlgorithmName,
-            Version = this.Metadata.Version
-        };
+        this.Metadata.HashAlgorithm = hashAlgorithmName;
+        this.Root = this.ComputeRootFromLeafHashes(hashFunction, true);
 
         return this.Root;
     }
@@ -234,7 +258,7 @@ public class MerkleTree
     /// <returns>The computed root hash.</returns>
     public Hex RecomputeSha256Root()
     {
-        return RecomputeRoot(ComputeSha256Hash, MerkleTreeHashAlgorithmStrings.Sha256);
+        return this.RecomputeRoot(ComputeSha256Hash, MerkleTreeHashAlgorithmStrings.Sha256);
     }
 
     /// <summary>
@@ -274,11 +298,23 @@ public class MerkleTree
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
-            // Check if this is v2.0 format (has header)
-            if (root.TryGetProperty("header", out _))
+            // Check if this is greater than v1.0 format (has header)
+            if (root.TryGetProperty("header", out var header))
             {
-                var dto = JsonSerializer.Deserialize<MerkleTreeV2Dto>(json, options);
-                return FromV2Dto(dto);
+                if (header.TryGetProperty("typ", out var typ1) && typ1.GetString() == MerkleTreeVersionStrings.V2_0)
+                {
+                    var dto = JsonSerializer.Deserialize<MerkleTreeV2Dto>(json, options);
+                    return FromV2Dto(dto);
+                }
+                else if (header.TryGetProperty("typ", out var typ2) && typ2.GetString() == MerkleTreeVersionStrings.V3_0)
+                {
+                    var dto = JsonSerializer.Deserialize<MerkleTreeV3Dto>(json, options);
+                    return FromV3Dto(dto);
+                }
+                else
+                {
+                    throw new MalformedJsonException("JSON does not contain a valid header with version " + MerkleTreeVersionStrings.V2_0 + " or " + MerkleTreeVersionStrings.V3_0);
+                }
             }
             // Otherwise assume v1.0 format (has metadata)
             else if (root.TryGetProperty("metadata", out _))
@@ -302,16 +338,6 @@ public class MerkleTree
     }
 
     /// <summary>
-    /// Converts the MerkleTree object to its JSON string representation after verifying the root using SHA-256.
-    /// </summary>
-    /// <returns>A JSON string representation of the MerkleTree object.</returns>
-    /// <exception cref="InvalidRootException">Thrown if the root verification fails.</exception>
-    public string ToJson()
-    {
-        return ToJson(ComputeSha256Hash);
-    }
-
-    /// <summary>
     /// Converts the MerkleTree object to its JSON string representation after verifying the root.
     /// </summary>
     /// <param name="hashFunction">The hash function to use for verification.</param>
@@ -321,11 +347,11 @@ public class MerkleTree
     /// <exception cref="InvalidRootException">Thrown if the root verification fails.</exception>
     public string ToJson(HashFunction hashFunction, Predicate<MerkleLeaf>? makePrivate = null, JsonSerializerOptions? options = null)
     {
-        if (!VerifyRoot(hashFunction))
+        if (!this.VerifyRoot(hashFunction, out var computedRoot))
         {
             throw new InvalidRootException(
                 $"Merkle tree root verification failed. The root hash '{Root}' does not" +
-                $" match the computed hash '{ComputeRootFromLeafHashes(hashFunction)}' from leaves.");
+                $" match the computed hash '{computedRoot}' from leaves.");
         }
 
         options ??= new JsonSerializerOptions
@@ -349,10 +375,25 @@ public class MerkleTree
             MerkleTreeV2Dto v2 = this.ToV2Dto(combinedPredicate);
             return JsonSerializer.Serialize(v2, options);
         }
+        else if (Metadata.Version == MerkleTreeVersionStrings.V3_0)
+        {
+            MerkleTreeV3Dto v3 = this.ToV3Dto(combinedPredicate);
+            return JsonSerializer.Serialize(v3, options);
+        }
         else
         {
             throw new ArgumentException("Unable to serialize Merkle tree with version " + Metadata.Version);
         }
+    }
+
+    /// <summary>
+    /// Converts the MerkleTree object to its JSON string representation after verifying the root using SHA-256.
+    /// </summary>
+    /// <returns>A JSON string representation of the MerkleTree object.</returns>
+    /// <exception cref="InvalidRootException">Thrown if the root verification fails.</exception>
+    public string ToJson()
+    {
+        return this.ToJson(ComputeSha256Hash);
     }
 
     /// <summary>
@@ -373,7 +414,7 @@ public class MerkleTree
     // Private Methods
     private HashFunction GetHashFunctionFromMetadata()
     {
-        return Metadata.HashAlgorithm switch
+        return this.Metadata.HashAlgorithm switch
         {
             MerkleTreeHashAlgorithmStrings.Sha256 => ComputeSha256Hash,
             MerkleTreeHashAlgorithmStrings.Sha256Legacy => ComputeSha256Hash,
@@ -383,18 +424,60 @@ public class MerkleTree
         };
     }
 
-    private Hex ComputeRootFromLeafHashes(HashFunction hashFunction)
+    private Hex ComputeRootFromLeafHashes(HashFunction hashFunction, bool forceNewHeader)
     {
-        if (Leaves.Count == 0)
+        if (this.Leaves.Count == 0)
         {
             throw new InvalidOperationException("Cannot compute root from empty tree");
+        }
+
+        if (this.Metadata.Version == MerkleTreeVersionStrings.V3_0)
+        {
+            // v3.0 has its first leaf as a header leaf which protects the algorithm
+            // and attacks which add or remove leaves, and single leaf presentation
+            // attacks.
+            //
+            // The first time we compute the root, we need to add a header leaf to
+            // the tree, if it is not already present.
+
+            var headerLeafMimeType = "application/merkle-exchange-header-3.0+json";
+            var headerLeafContentType = $"{headerLeafMimeType}; charset=utf-8; encoding=hex";
+            var hasHeaderLeaf = this.Leaves.First().ContentType == headerLeafContentType;
+
+            if (forceNewHeader && hasHeaderLeaf)
+            {
+                this.WritableLeaves.RemoveAt(0);
+            }
+
+            if (forceNewHeader || !hasHeaderLeaf)
+            {
+                var leaves = new List<MerkleLeaf>(this.Leaves.Count + 1);
+
+                MerkleTreeV3LeafHeaderDto header = new()
+                {
+                    Alg = this.Metadata.HashAlgorithm, // assumes Metadata is configured before calling this method
+                    Typ = headerLeafMimeType,
+                    Leaves = this.Leaves.Count + 1,
+                    Exchange = this.Metadata.ExchangeDocumentType ?? "unspecified",
+                };
+
+                var headerJson = JsonSerializer.Serialize(header);
+                var headerHex = new Hex(System.Text.Encoding.UTF8.GetBytes(headerJson));
+                var headerLeaf = MerkleLeaf.FromData(headerLeafContentType, headerHex);
+
+                leaves.Add(headerLeaf);
+                leaves.AddRange(this.Leaves);
+
+                this.Leaves = leaves;
+            }
         }
 
         // Compute hashes from the leaf data and salt for non-private leaves
         // to ensure that we detect tampered data during verification
 
-        List<Hex> hashes = new List<Hex>();
-        foreach (var leaf in Leaves)
+        var hashes = new List<Hex>(this.Leaves.Count);
+
+        foreach (var leaf in this.Leaves)
         {
             if (leaf.IsPrivate)
             {
@@ -403,8 +486,17 @@ public class MerkleTree
             }
             else
             {
-                // For non-private leaves, recompute the hash from data and salt
-                var computedHash = hashFunction(Hex.Concat(leaf.Data, leaf.Salt).ToByteArray());
+                // Recompute the hash from data and salt
+                var computedHash = MerkleLeaf.UseHashFunction(hashFunction, leaf.Data, leaf.Salt);
+
+                if (!leaf.Hash.IsEmpty())
+                {
+                    if (computedHash != leaf.Hash)
+                    {
+                        throw new InvalidLeafHashException("Leaf hash does not match computed hash");
+                    }
+                }
+
                 hashes.Add(computedHash);
             }
         }
@@ -531,7 +623,41 @@ public class MerkleTree
         }
     }
 
-    private static MerkleTree FromDto(MerkleTreeV1Dto dto)
+    private MerkleTreeV3Dto ToV3Dto(Predicate<MerkleLeaf> makePrivate)
+    {
+        return new MerkleTreeV3Dto
+        {
+            Root = Root.ToString(),
+            Leaves = Leaves?.Select(l => makeLeafV3Dto(l, makePrivate)).ToList(),
+            Header = new MerkleTreeV3HeaderDto
+            {
+                Typ = Metadata?.Version ?? string.Empty,
+            }
+        };
+
+        static MerkleTreeV3LeafDto makeLeafV3Dto(MerkleLeaf leaf, Predicate<MerkleLeaf> makePrivate)
+        {
+            if (makePrivate(leaf))
+            {
+                return new MerkleTreeV3LeafDto
+                {
+                    Hash = leaf.Hash.ToString()
+                };
+            }
+            else
+            {
+                return new MerkleTreeV3LeafDto
+                {
+                    Data = leaf.ToHexString(),
+                    Salt = leaf.Salt.ToString(),
+                    Hash = leaf.Hash.ToString(),
+                    ContentType = leaf.ContentType
+                };
+            }
+        }
+    }
+
+    private static MerkleTree FromDto(MerkleTreeV1Dto inboundDto)
     {
         var hexParseOptions = HexParseOptions.AllowEmptyString | HexParseOptions.AllowNullString;
 
@@ -552,22 +678,22 @@ public class MerkleTree
 
         return new MerkleTree
         {
-            Root = Hex.Parse(dto.Root, hexParseOptions),
-            Leaves = dto.Leaves?.Select(l => new MerkleLeaf(
-                l.ContentType,
-                readData(l),
-                Hex.Parse(l.Salt, hexParseOptions),
-                Hex.Parse(l.Hash, hexParseOptions)
+            Root = Hex.Parse(inboundDto.Root, hexParseOptions),
+            Leaves = inboundDto.Leaves?.Select(leafDto => new MerkleLeaf(
+                leafDto.ContentType,
+                readData(leafDto),
+                Hex.Parse(leafDto.Salt, hexParseOptions),
+                Hex.Parse(leafDto.Hash, hexParseOptions)
             )).ToList() ?? new List<MerkleLeaf>(),
             Metadata = new MerkleMetadata
             {
-                HashAlgorithm = dto.Metadata?.HashAlgorithm ?? string.Empty,
-                Version = dto.Metadata?.Version ?? string.Empty,
+                HashAlgorithm = inboundDto.Metadata?.HashAlgorithm ?? string.Empty,
+                Version = inboundDto.Metadata?.Version ?? string.Empty,
             }
         };
     }
 
-    private static MerkleTree FromV2Dto(MerkleTreeV2Dto dto)
+    private static MerkleTree FromV2Dto(MerkleTreeV2Dto inboundDto)
     {
         var hexParseOptions = HexParseOptions.AllowEmptyString | HexParseOptions.AllowNullString;
 
@@ -588,8 +714,8 @@ public class MerkleTree
 
         return new MerkleTree
         {
-            Root = Hex.Parse(dto.Root, hexParseOptions),
-            Leaves = dto.Leaves?.Select(l => new MerkleLeaf(
+            Root = Hex.Parse(inboundDto.Root, hexParseOptions),
+            Leaves = inboundDto.Leaves?.Select(l => new MerkleLeaf(
                 l.ContentType,
                 readData(l),
                 Hex.Parse(l.Salt, hexParseOptions),
@@ -597,8 +723,90 @@ public class MerkleTree
             )).ToList() ?? new List<MerkleLeaf>(),
             Metadata = new MerkleMetadata
             {
-                HashAlgorithm = dto.Header?.Alg ?? MerkleTreeHashAlgorithmStrings.Sha256,
-                Version = dto.Header?.Typ ?? MerkleTreeVersionStrings.V1_0,
+                HashAlgorithm = inboundDto.Header?.Alg ?? MerkleTreeHashAlgorithmStrings.Sha256,
+                Version = inboundDto.Header?.Typ ?? MerkleTreeVersionStrings.V1_0,
+            }
+        };
+    }
+
+    private static MerkleTree FromV3Dto(MerkleTreeV3Dto inboundDto)
+    {
+        var hexParseOptions = HexParseOptions.AllowEmptyString | HexParseOptions.AllowNullString;
+
+        Hex readData(MerkleTreeV3LeafDto leafDto)
+        {
+            if (string.IsNullOrEmpty(leafDto.Data))
+            {
+                return Hex.Empty;
+            }
+
+            if (leafDto.Data.StartsWith("0x"))
+            {
+                return Hex.Parse(leafDto.Data, hexParseOptions);
+            }
+
+            return new Hex(System.Text.Encoding.UTF8.GetBytes(leafDto.Data));
+        }
+
+        MerkleTreeV3LeafHeaderDto readLeafHeader(Hex leafData)
+        {
+            var headerJson = System.Text.Encoding.UTF8.GetString(leafData.ToByteArray());
+
+            try
+            {
+                var header = JsonSerializer.Deserialize<MerkleTreeV3LeafHeaderDto>(headerJson);
+
+                // Verify this is actually a header leaf by checking required fields
+                if (string.IsNullOrEmpty(header.Alg) ||
+                    string.IsNullOrEmpty(header.Typ) ||
+                    string.IsNullOrEmpty(header.Exchange) ||
+                    header.Leaves <= 0)
+                {
+                    throw new MalformedJsonException("Unable to parse V3.0 tree: first leaf is not a valid header leaf");
+                }
+
+                // Verify the content type matches V3 header format
+                if (header.Typ != "application/merkle-exchange-header-3.0+json")
+                {
+                    throw new MalformedJsonException("Unable to parse V3.0 tree: header leaf has incorrect type");
+                }
+
+                return header;
+            }
+            catch (JsonException)
+            {
+                throw new MalformedJsonException("Unable to parse V3.0 tree: header leaf is not valid JSON");
+            }
+        }
+
+        var leaves = inboundDto.Leaves?.Select(leafDto => new MerkleLeaf(
+                leafDto.ContentType,
+                readData(leafDto),
+                Hex.Parse(leafDto.Salt, hexParseOptions),
+                Hex.Parse(leafDto.Hash, hexParseOptions)
+            )).ToList() ?? new List<MerkleLeaf>();
+
+        if (leaves.Count == 0)
+        {
+            throw new MalformedJsonException("Unable to parse V3.0 tree: no leaves found");
+        }
+
+        var protectedHeader = readLeafHeader(leaves[0].Data);
+
+        if (leaves.Count != protectedHeader.Leaves)
+        {
+            throw new MalformedJsonException("Unable to parse V3.0 tree: leaf count mismatch");
+        }
+
+        return new MerkleTree
+        {
+            Root = Hex.Parse(inboundDto.Root, hexParseOptions),
+            Leaves = leaves,
+            Metadata = new MerkleMetadata
+            {
+                HashAlgorithm = protectedHeader.Alg ?? throw new MalformedJsonException("Unable to parse V3.0 header: 'alg' field is missing"),
+                Version = inboundDto.Header?.Typ ?? throw new MalformedJsonException("Unable to parse V3.0 header: 'typ' field is missing"),
+                ExchangeDocumentType = protectedHeader.Exchange ?? throw new MalformedJsonException("Unable to parse V3.0 header: 'exchange' field is missing"),
             }
         };
     }
