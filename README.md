@@ -230,7 +230,7 @@ When preparing a new release, follow these steps to ensure quality and consisten
 
 5. **Build & Test**
    - Run full build in Release mode
-   - Verify all 231+ tests pass
+   - Verify all tests pass
    - Check NuGet package builds successfully
    - Address any build warnings
 
