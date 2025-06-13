@@ -308,6 +308,12 @@ The resulting JSON would look like this, with private fields only showing their 
 {
   "leaves": [
     {
+      "data": "0x7b22616c67223a22534841323536222c22747970223a226170706c69636174696f6e2f6d65726b6c652d65786368616e67652d6865616465722d332e305c75303032426a736f6e222c226c6561766573223a31342c2265786368616e6765223a2270617373706f7274227d",
+      "salt": "0x75c70583ab8504d3c1adce4b28434bb0",
+      "hash": "0x237d81dcb55127e3db077a46364ee10c4fd293757b786e3f8cb9eb79a5847495",
+      "contentType": "application/merkle-exchange-header-3.0+json; charset=utf-8; encoding=hex"
+    },
+    {
       "data": "0x7b22646f63756d656e7454797065223a2270617373706f7274227d",
       "salt": "0xa48c12f5e7b943de67c8901f",
       "hash": "0x05e7faf4a47104a39003db687c19c25b1d8178a00573340fa11e93235229e096",
@@ -334,7 +340,23 @@ The resulting JSON would look like this, with private fields only showing their 
 }
 ```
 
-Note that in v3.0, the header leaf (first leaf) contains protected metadata about the tree, including the hash algorithm, leaf count, and document type. This metadata is cryptographically protected by the tree's structure, preventing tampering with critical tree parameters. 
+Note that in v3.0, the header leaf (first leaf) contains protected metadata about the tree, including:
+- `alg`: The hash algorithm used (SHA256)
+- `typ`: The document type identifier
+- `leaves`: The total number of leaves in the tree
+- `exchange`: The type of document (e.g., "passport")
+
+This metadata is cryptographically protected by the tree's structure, preventing tampering with critical tree parameters.
+
+The header leaf's data, when decoded from hex, looks like this:
+```json
+{
+  "alg": "SHA256",
+  "typ": "application/merkle-exchange-header-3.0\u002Bjson",
+  "leaves": 14,
+  "exchange": "passport"
+}
+```
 
 ### Verifying a Tree with Private Leaves
 

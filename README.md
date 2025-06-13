@@ -16,6 +16,26 @@ dotnet add package Evoq.Blockchain
 - Framework-agnostic design (works with any blockchain implementation)
 - [Merkle trees with selective disclosure and automatic random salts](./docs/merkle/selective-disclosure.md)
 
+## Future Vision
+
+The library is designed to support advanced verification capabilities in the future, in collaboration with wrapper libraries:
+
+- **Complete Chain of Trust Verification**
+  - Decode and validate JWS structures
+  - Parse and verify Merkle tree JSON payloads
+  - Validate individual leaf data and hashes
+  - Verify root hashes against blockchain attestations
+  - Support for Merkle Commitment Protocol (MCP) verification
+
+- **Intelligent Verification**
+  - Automatic detection of private leaves
+  - Validation of header leaf metadata
+  - Cryptographic proof verification
+  - Blockchain attestation checking
+  - Selective disclosure analysis
+
+This vision enables a complete end-to-end verification system that can validate the entire chain of trust from JWS signatures down to individual leaf data and back up to blockchain attestations. Work is in progress with wrapper libraries like Zipwire.ProofPack which adds attestation locators and JWS outer wrappers to create complete proof packages.
+
 ## Documentation
 
 Comprehensive documentation is available in the [docs directory](./docs/):
