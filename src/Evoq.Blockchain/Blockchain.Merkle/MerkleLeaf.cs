@@ -158,6 +158,67 @@ public class MerkleLeaf
         return false;
     }
 
+    /// <summary>
+    /// Attempts to read the data as a JSON object and deserialize it into a dictionary.
+    /// </summary>
+    /// <param name="jsonObject">When this method returns, contains the deserialized JSON object if successful; otherwise, null.</param>
+    /// <returns>true if the data was successfully read and deserialized as JSON; otherwise, false.</returns>
+    public bool TryReadJson(out Dictionary<string, object?>? jsonObject)
+    {
+        if (IsUtf8 && TryReadText(out var jsonText))
+        {
+            try
+            {
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                jsonObject = JsonSerializer.Deserialize<Dictionary<string, object?>>(jsonText, options);
+                return jsonObject != null;
+            }
+            catch (JsonException)
+            {
+                jsonObject = null;
+                return false;
+            }
+        }
+
+        jsonObject = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to read the data as a JSON object and deserialize it into the specified type.
+    /// </summary>
+    /// <typeparam name="T">The type to deserialize the JSON data into.</typeparam>
+    /// <param name="obj">When this method returns, contains the deserialized object if successful; otherwise, null.</param>
+    /// <returns>true if the data was successfully read and deserialized as JSON; otherwise, false.</returns>
+    public bool TryReadObject<T>(out T? obj)
+    {
+        if (IsUtf8 && TryReadText(out var jsonText))
+        {
+            try
+            {
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                obj = JsonSerializer.Deserialize<T>(jsonText, options);
+                return obj != null;
+            }
+            catch (JsonException)
+            {
+                obj = default;
+                return false;
+            }
+        }
+
+        obj = default;
+        return false;
+    }
+
     //
 
     internal string ToHexString()
