@@ -105,7 +105,7 @@ public class MerkleLeaf
     /// </summary>
     /// <param name="fieldName">The name of the field to store in the leaf.</param>
     /// <param name="fieldValue">The value of the field to store in the leaf.</param>
-    /// <returns>A new MerkleLeaf with "application/json; charset=utf-8" content type.</returns>
+    /// <returns>A new MerkleLeaf with "application/json; charset=utf-8; encoding=hex" content type.</returns>
     public static MerkleLeaf FromJsonValue(string fieldName, object? fieldValue)
     {
         return FromJsonValue(fieldName, fieldValue, MerkleTree.GenerateRandomSalt(), MerkleTree.ComputeSha256Hash);
@@ -118,7 +118,7 @@ public class MerkleLeaf
     /// <param name="fieldValue">The value of the field to store in the leaf.</param>
     /// <param name="salt">The salt used for hashing the leaf data.</param>
     /// <param name="hashFunction">The hash function to use for hashing the leaf data.</param>
-    /// <returns>A new MerkleLeaf with "application/json; charset=utf-8" content type.</returns>
+    /// <returns>A new MerkleLeaf with "application/json; charset=utf-8; encoding=hex" content type.</returns>
     public static MerkleLeaf FromJsonValue(string fieldName, object? fieldValue, Hex salt, MerkleTree.HashFunction hashFunction)
     {
         var jsonObject = new Dictionary<string, object?>
@@ -130,7 +130,7 @@ public class MerkleLeaf
         var data = new Hex(System.Text.Encoding.UTF8.GetBytes(json));
         var hash = UseHashFunction(hashFunction, data, salt);
 
-        return new MerkleLeaf(ContentTypeUtility.CreateJsonUtf8(), data, salt, hash);
+        return new MerkleLeaf(ContentTypeUtility.CreateJsonUtf8Hex(), data, salt, hash);
     }
 
     /// <summary>

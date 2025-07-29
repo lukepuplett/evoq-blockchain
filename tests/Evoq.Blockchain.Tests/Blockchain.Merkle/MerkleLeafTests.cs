@@ -92,7 +92,7 @@ public class MerkleLeafTests
         var leaf = MerkleLeaf.FromJsonValue(fieldName, fieldValue);
 
         // Assert
-        Assert.AreEqual("application/json; charset=utf-8", leaf.ContentType);
+        Assert.AreEqual("application/json; charset=utf-8; encoding=hex", leaf.ContentType);
         Assert.IsFalse(leaf.Data.IsEmpty());
         Assert.IsFalse(leaf.Salt.IsEmpty());
         Assert.IsFalse(leaf.Hash.IsEmpty());
@@ -112,7 +112,7 @@ public class MerkleLeafTests
         var leaf = MerkleLeaf.FromJsonValue(fieldName, fieldValue, salt, MerkleTree.ComputeSha256Hash);
 
         // Assert
-        Assert.AreEqual("application/json; charset=utf-8", leaf.ContentType);
+        Assert.AreEqual("application/json; charset=utf-8; encoding=hex", leaf.ContentType);
         Assert.IsFalse(leaf.Data.IsEmpty());
         Assert.AreEqual(salt, leaf.Salt);
         Assert.IsFalse(leaf.Hash.IsEmpty());

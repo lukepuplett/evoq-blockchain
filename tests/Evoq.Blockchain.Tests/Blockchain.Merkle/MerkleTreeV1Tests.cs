@@ -179,7 +179,7 @@ public class MerkleV1TreeTests
         var leaf = MerkleLeaf.FromJsonValue("name", "John", Hex.Empty, MerkleTree.ComputeSha256Hash);
 
         // Assert
-        Assert.AreEqual("application/json; charset=utf-8", leaf.ContentType);
+        Assert.AreEqual("application/json; charset=utf-8; encoding=hex", leaf.ContentType);
         Assert.IsTrue(leaf.IsUtf8);
         Assert.AreEqual(Hex.Empty, leaf.Salt);
 
