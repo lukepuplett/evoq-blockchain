@@ -9,6 +9,14 @@ This directory contains documentation for the Evoq.Blockchain library, a lightwe
 Documentation for our Merkle tree implementation, including:
 - [Selective Disclosure in Merkle Trees](./merkle/selective-disclosure.md) - includes complete examples
 
+### [Shipping Guide](./SHIPPING.md)
+
+Complete guide for releasing new versions, including:
+- Version management and validation
+- GitHub releases with proper documentation
+- NuGet publishing procedures
+- Emergency procedures and troubleshooting
+
 ## Overview
 
 Evoq.Blockchain provides a set of tools and utilities for working with blockchain technologies from .NET applications. The library focuses on providing:

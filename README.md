@@ -223,69 +223,33 @@ export NUGET_API_KEY="your-nuget-api-key"
 
 ## Shipping a Release
 
-When preparing a new release, follow these steps to ensure quality and consistency:
+**IMPORTANT**: Follow the comprehensive [Shipping Guide](./docs/SHIPPING.md) for detailed release procedures.
 
-1. **Version Management**
-   - Update version in `src/Evoq.Blockchain/Evoq.Blockchain.csproj`
-   - Follow semantic versioning (MAJOR.MINOR.PATCH)
-   - Create git tag matching version (e.g., `v1.4.0`)
+The release process includes:
+- Version management and validation
+- GitHub releases with proper documentation
+- NuGet publishing
+- Verification and testing
 
-2. **Code Quality**
-   - Run `./build.sh` to verify all tests pass
-   - Check for and address any critical warnings
-   - Ensure all public APIs are documented
-   - Remove any TODO comments
-
-3. **Documentation**
-   - Update README.md with new features/examples
-   - Verify API documentation is complete
-   - Document any breaking changes
-   - Add examples for new functionality
-
-4. **Git Hygiene**
-   - Commit all changes with conventional commit messages
-   - Create and push version tag
-   - Verify no sensitive data in commits
-   - Ensure clean working directory
-
-5. **Build & Test**
-   - Run full build in Release mode
-   - Verify all tests pass
-   - Check NuGet package builds successfully
-   - Address any build warnings
-
-6. **Release Artifacts**
-   - Verify NuGet package in `./artifacts`
-   - Check package version matches project
-   - Validate package contents
-   - Review package metadata
-
-7. **Pre-Release Checklist**
-   - Review changes since last release
-   - Verify backward compatibility
-   - Check security implications
-   - Review performance impact
-
-8. **Post-Release Tasks**
-   - Create GitHub release
-   - Write release notes
-   - Publish to NuGet
-   - Update documentation if needed
-
-Example release workflow:
+Quick reference:
 ```bash
-# 1. Update version in .csproj
-# 2. Build and test
+# Check current versions
+grep '<Version>' src/Evoq.Blockchain/Evoq.Blockchain.csproj
+git tag --list --sort=-version:refname | head -1
+curl -s "https://api.nuget.org/v3/registration5-semver1/evoq.blockchain/index.json" | grep -o '"version":"[^"]*"' | tail -1
+
+# Build and test
 ./build.sh
 
-# 3. Create and push tag
-git tag -a v1.4.0 -m "Version 1.4.0 - Add private leaves support"
-git push origin v1.4.0
+# Create tag and release
+git tag -a vX.Y.Z -m "Version X.Y.Z - Description"
+git push origin vX.Y.Z
 
-# 4. Create GitHub release and publish
-export NUGET_API_KEY="your-nuget-api-key"
-./publish.sh
+# Publish to NuGet (manual upload)
+# Upload artifacts/Evoq.Blockchain.X.Y.Z.nupkg to https://www.nuget.org/packages/manage/upload
 ```
+
+**See [docs/SHIPPING.md](./docs/SHIPPING.md) for the complete process.**
 
 ## Contributing
 
