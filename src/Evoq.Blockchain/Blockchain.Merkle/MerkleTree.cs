@@ -9,6 +9,25 @@ using System.Text.Json;
 using Evoq.Blockchain;
 
 /// <summary>
+/// Exception thrown when a leaf cannot be read as JSON and therefore cannot be processed for selective disclosure.
+/// </summary>
+public class NonJsonLeafException : Exception
+{
+    /// <summary>
+    /// Initializes a new instance of the NonJsonLeafException class.
+    /// </summary>
+    /// <param name="message">The error message.</param>
+    public NonJsonLeafException(string message) : base(message) { }
+
+    /// <summary>
+    /// Initializes a new instance of the NonJsonLeafException class.
+    /// </summary>
+    /// <param name="message">The error message.</param>
+    /// <param name="innerException">The inner exception.</param>
+    public NonJsonLeafException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>
 /// A Merkle tree is a binary tree of hashes.
 /// </summary>
 /// <remarks>
@@ -239,7 +258,7 @@ public class MerkleTree
     /// <exception cref="NotSupportedException">Thrown if the hash algorithm specified in the metadata is not supported.</exception>
     public bool VerifyRoot()
     {
-        var hashFunction = GetHashFunctionFromMetadata();
+        var hashFunction = GetHashFunctionFromMetadata(this.Metadata.HashAlgorithm);
         return this.VerifyRoot(hashFunction);
     }
 
@@ -436,15 +455,111 @@ public class MerkleTree
         return new Hex(saltBytes);
     }
 
-    // Private Methods
-    private HashFunction GetHashFunctionFromMetadata()
+    /// <summary>
+    /// Creates a new MerkleTree with selective disclosure based on the source tree and a predicate.
+    /// </summary>
+    /// <param name="sourceTree">The source MerkleTree to create a selective disclosure version from.</param>
+    /// <param name="makePrivate">A predicate that determines which leaves should be made private.</param>
+    /// <returns>A new MerkleTree with the specified selective disclosure applied.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when sourceTree or makePrivate is null.</exception>
+    public static MerkleTree From(MerkleTree sourceTree, Predicate<MerkleLeaf> makePrivate)
     {
-        return this.Metadata.HashAlgorithm switch
+        if (sourceTree == null)
+        {
+            throw new ArgumentNullException(nameof(sourceTree));
+        }
+
+        if (makePrivate == null)
+        {
+            throw new ArgumentNullException(nameof(makePrivate));
+        }
+
+        var newLeaves = new List<MerkleLeaf>();
+
+        foreach (var leaf in sourceTree.Leaves)
+        {
+            // Determine if this leaf should be private
+            bool shouldBePrivate = makePrivate(leaf);
+
+            if (shouldBePrivate)
+            {
+                // Create a private leaf with just the hash
+                newLeaves.Add(new MerkleLeaf(leaf.Hash));
+            }
+            else
+            {
+                // Create a new leaf with full data (copy the original)
+                newLeaves.Add(new MerkleLeaf(leaf.ContentType, leaf.Data, leaf.Salt, leaf.Hash));
+            }
+        }
+
+        // Create new tree with the same version and metadata
+        var newTree = new MerkleTree(sourceTree.Metadata.Version, newLeaves.ToArray());
+
+        // Copy metadata
+        newTree.Metadata.HashAlgorithm = sourceTree.Metadata.HashAlgorithm;
+        newTree.Metadata.ExchangeDocumentType = sourceTree.Metadata.ExchangeDocumentType;
+
+        // Handle empty trees by setting root to Hex.Empty, otherwise recompute
+        if (newLeaves.Count == 0)
+        {
+            newTree.Root = Hex.Empty;
+        }
+        else
+        {
+            // Recompute the root using the same hash function as the source tree
+            var hashFunction = GetHashFunctionFromMetadata(newTree.Metadata.HashAlgorithm);
+            newTree.RecomputeRoot(hashFunction, newTree.Metadata.HashAlgorithm);
+        }
+
+        return newTree;
+    }
+
+    /// <summary>
+    /// Creates a new MerkleTree with selective disclosure based on the source tree and a set of keys to preserve.
+    /// Leaves containing any of the specified keys will be revealed, all others will be made private.
+    /// </summary>
+    /// <param name="sourceTree">The source MerkleTree to create a selective disclosure version from.</param>
+    /// <param name="preserveKeys">A set of keys to preserve (reveal) in the new tree. Leaves containing any of these keys will be revealed.</param>
+    /// <returns>A new MerkleTree with the specified selective disclosure applied.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when sourceTree or preserveKeys is null.</exception>
+    /// <exception cref="NonJsonLeafException">Thrown when one or more leaves cannot be read as JSON and therefore cannot be processed for selective disclosure.</exception>
+    public static MerkleTree From(MerkleTree sourceTree, ISet<string> preserveKeys)
+    {
+        if (sourceTree == null)
+        {
+            throw new ArgumentNullException(nameof(sourceTree));
+        }
+
+        if (preserveKeys == null)
+        {
+            throw new ArgumentNullException(nameof(preserveKeys));
+        }
+
+        // Create a predicate that uses TryReadJsonKeys to determine which leaves to preserve
+        Predicate<MerkleLeaf> makePrivate = leaf =>
+        {
+            if (!leaf.TryReadJsonKeys(out var keys))
+            {
+                throw new NonJsonLeafException($"Leaf cannot be read as JSON and therefore cannot be processed for selective disclosure.");
+            }
+
+            // If the leaf has any of the keys we want to preserve, don't make it private
+            return !keys.Any(key => preserveKeys.Contains(key));
+        };
+
+        return From(sourceTree, makePrivate);
+    }
+
+    // Private Methods
+    private static HashFunction GetHashFunctionFromMetadata(string hashAlgorithmName)
+    {
+        return hashAlgorithmName switch
         {
             MerkleTreeHashAlgorithmStrings.Sha256 => ComputeSha256Hash,
             MerkleTreeHashAlgorithmStrings.Sha256Legacy => ComputeSha256Hash,
             _ => throw new NotSupportedException(
-                $"Hash algorithm '{Metadata.HashAlgorithm}' specified in metadata is not supported. " +
+                $"Hash algorithm '{hashAlgorithmName}' specified in metadata is not supported. " +
                 "To use a custom hash algorithm, call VerifyRoot(HashFunction) directly with your implementation.")
         };
     }

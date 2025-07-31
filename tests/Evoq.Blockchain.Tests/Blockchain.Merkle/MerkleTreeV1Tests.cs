@@ -718,6 +718,294 @@ public class MerkleV1TreeTests
         Assert.AreEqual("1.0", metadata.GetProperty("version").GetString());
     }
 
+    [TestMethod]
+    public void From_WithAllLeavesRevealed_ShouldCreateIdenticalTree()
+    {
+        // Arrange - Create source tree with multiple leaves
+        var sourceTree = new MerkleTree("1.0");
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("age", 30, Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("email", "john@example.com", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        // Act - Create selective disclosure tree with all leaves revealed
+        var selectiveTree = MerkleTree.From(
+            sourceTree,
+            makePrivate: leaf => false // Reveal all leaves
+        );
+
+        // Assert - Trees should be identical
+        Assert.AreEqual(sourceTree.Root, selectiveTree.Root);
+        Assert.AreEqual(sourceTree.Metadata.Version, selectiveTree.Metadata.Version);
+        Assert.AreEqual(sourceTree.Metadata.HashAlgorithm, selectiveTree.Metadata.HashAlgorithm);
+        Assert.AreEqual(sourceTree.Leaves.Count, selectiveTree.Leaves.Count);
+
+        // All leaves should have full data (not private)
+        for (int i = 0; i < sourceTree.Leaves.Count; i++)
+        {
+            Assert.IsFalse(selectiveTree.Leaves[i].IsPrivate);
+            Assert.AreEqual(sourceTree.Leaves[i].Data, selectiveTree.Leaves[i].Data);
+            Assert.AreEqual(sourceTree.Leaves[i].Salt, selectiveTree.Leaves[i].Salt);
+            Assert.AreEqual(sourceTree.Leaves[i].Hash, selectiveTree.Leaves[i].Hash);
+            Assert.AreEqual(sourceTree.Leaves[i].ContentType, selectiveTree.Leaves[i].ContentType);
+        }
+    }
+
+    [TestMethod]
+    public void From_WithAllLeavesPrivate_ShouldCreateTreeWithPrivateLeaves()
+    {
+        // Arrange - Create source tree with multiple leaves
+        var sourceTree = new MerkleTree("1.0");
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("age", 30, Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("email", "john@example.com", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        // Act - Create selective disclosure tree with all leaves private
+        var selectiveTree = MerkleTree.From(
+            sourceTree,
+            makePrivate: leaf => true // Make all leaves private
+        );
+
+        // Assert - Root should be the same
+        Assert.AreEqual(sourceTree.Root, selectiveTree.Root);
+        Assert.AreEqual(sourceTree.Metadata.Version, selectiveTree.Metadata.Version);
+        Assert.AreEqual(sourceTree.Metadata.HashAlgorithm, selectiveTree.Metadata.HashAlgorithm);
+        Assert.AreEqual(sourceTree.Leaves.Count, selectiveTree.Leaves.Count);
+
+        // All leaves should be private (only hash, no data/salt)
+        for (int i = 0; i < sourceTree.Leaves.Count; i++)
+        {
+            Assert.IsTrue(selectiveTree.Leaves[i].IsPrivate);
+            Assert.IsTrue(selectiveTree.Leaves[i].Data.IsEmpty());
+            Assert.IsTrue(selectiveTree.Leaves[i].Salt.IsEmpty());
+            Assert.AreEqual(sourceTree.Leaves[i].Hash, selectiveTree.Leaves[i].Hash);
+        }
+    }
+
+    [TestMethod]
+    public void From_WithSelectivePrivacy_ShouldCreateMixedTree()
+    {
+        // Arrange - Create source tree with multiple leaves
+        var sourceTree = new MerkleTree("1.0");
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("ssn", "123-45-6789", Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("email", "john@example.com", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("phone", "555-1234", Hex.Parse("0x445566"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        // Act - Create selective disclosure tree with some leaves private
+        var selectiveTree = MerkleTree.From(
+            sourceTree,
+            makePrivate: leaf =>
+            {
+                // Make SSN and phone private, reveal name and email
+                if (leaf.TryReadJsonKeys(out var keys) && keys.Count > 0)
+                {
+                    return keys.Contains("ssn") || keys.Contains("phone");
+                }
+                return false;
+            }
+        );
+
+        // Assert - Root should be the same
+        Assert.AreEqual(sourceTree.Root, selectiveTree.Root);
+        Assert.AreEqual(sourceTree.Metadata.Version, selectiveTree.Metadata.Version);
+        Assert.AreEqual(sourceTree.Metadata.HashAlgorithm, selectiveTree.Metadata.HashAlgorithm);
+        Assert.AreEqual(sourceTree.Leaves.Count, selectiveTree.Leaves.Count);
+
+        // Check specific leaves
+        Assert.IsFalse(selectiveTree.Leaves[0].IsPrivate); // name - revealed
+        Assert.IsTrue(selectiveTree.Leaves[1].IsPrivate);  // ssn - private
+        Assert.IsFalse(selectiveTree.Leaves[2].IsPrivate); // email - revealed
+        Assert.IsTrue(selectiveTree.Leaves[3].IsPrivate);  // phone - private
+
+        // Verify revealed leaves have full data
+        Assert.AreEqual(sourceTree.Leaves[0].Data, selectiveTree.Leaves[0].Data);
+        Assert.AreEqual(sourceTree.Leaves[0].Salt, selectiveTree.Leaves[0].Salt);
+        Assert.AreEqual(sourceTree.Leaves[2].Data, selectiveTree.Leaves[2].Data);
+        Assert.AreEqual(sourceTree.Leaves[2].Salt, selectiveTree.Leaves[2].Salt);
+
+        // Verify private leaves only have hash
+        Assert.IsTrue(selectiveTree.Leaves[1].Data.IsEmpty());
+        Assert.IsTrue(selectiveTree.Leaves[1].Salt.IsEmpty());
+        Assert.IsTrue(selectiveTree.Leaves[3].Data.IsEmpty());
+        Assert.IsTrue(selectiveTree.Leaves[3].Salt.IsEmpty());
+    }
+
+    [TestMethod]
+    public void From_WithEmptyTree_ShouldCreateEmptyTree()
+    {
+        // Arrange - Create empty source tree
+        var sourceTree = new MerkleTree("1.0");
+        // Note: We don't call RecomputeSha256Root() on empty trees as it throws an exception
+
+        // Act - Create selective disclosure tree
+        var selectiveTree = MerkleTree.From(
+            sourceTree,
+            makePrivate: leaf => true
+        );
+
+        // Assert - Should be empty tree with same metadata
+        Assert.AreEqual(sourceTree.Root, selectiveTree.Root);
+        Assert.AreEqual(sourceTree.Metadata.Version, selectiveTree.Metadata.Version);
+        Assert.AreEqual(sourceTree.Metadata.HashAlgorithm, selectiveTree.Metadata.HashAlgorithm);
+        Assert.AreEqual(0, selectiveTree.Leaves.Count);
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(ArgumentNullException))]
+    public void From_WithNullSourceTree_ShouldThrowArgumentNullException()
+    {
+        // Act & Assert
+        MerkleTree.From(
+            null!,
+            makePrivate: leaf => false
+        );
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(ArgumentNullException))]
+    public void From_WithNullPredicate_ShouldThrowArgumentNullException()
+    {
+        // Arrange - Create source tree
+        var sourceTree = new MerkleTree("1.0");
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        // Act & Assert
+        MerkleTree.From(
+            sourceTree,
+            makePrivate: null!
+        );
+    }
+
+    [TestMethod]
+    public void From_WithKeysToPreserve_ShouldRevealLeavesWithMatchingKeys()
+    {
+        // Arrange - Create source tree with multiple leaves
+        var sourceTree = new MerkleTree("1.0");
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("ssn", "123-45-6789", Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("email", "john@example.com", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("phone", "555-1234", Hex.Parse("0x445566"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        var preserveKeys = new HashSet<string> { "name", "email" };
+
+        // Act - Create selective disclosure tree preserving only name and email
+        var selectiveTree = MerkleTree.From(sourceTree, preserveKeys);
+
+        // Assert - Root should be the same
+        Assert.AreEqual(sourceTree.Root, selectiveTree.Root);
+        Assert.AreEqual(sourceTree.Metadata.Version, selectiveTree.Metadata.Version);
+        Assert.AreEqual(sourceTree.Metadata.HashAlgorithm, selectiveTree.Metadata.HashAlgorithm);
+        Assert.AreEqual(sourceTree.Leaves.Count, selectiveTree.Leaves.Count);
+
+        // Check specific leaves
+        Assert.IsFalse(selectiveTree.Leaves[0].IsPrivate); // name - revealed (matches preserveKeys)
+        Assert.IsTrue(selectiveTree.Leaves[1].IsPrivate);  // ssn - private (not in preserveKeys)
+        Assert.IsFalse(selectiveTree.Leaves[2].IsPrivate); // email - revealed (matches preserveKeys)
+        Assert.IsTrue(selectiveTree.Leaves[3].IsPrivate);  // phone - private (not in preserveKeys)
+
+        // Verify revealed leaves have full data
+        Assert.AreEqual(sourceTree.Leaves[0].Data, selectiveTree.Leaves[0].Data);
+        Assert.AreEqual(sourceTree.Leaves[0].Salt, selectiveTree.Leaves[0].Salt);
+        Assert.AreEqual(sourceTree.Leaves[2].Data, selectiveTree.Leaves[2].Data);
+        Assert.AreEqual(selectiveTree.Leaves[2].Salt, selectiveTree.Leaves[2].Salt);
+
+        // Verify private leaves only have hash
+        Assert.IsTrue(selectiveTree.Leaves[1].Data.IsEmpty());
+        Assert.IsTrue(selectiveTree.Leaves[1].Salt.IsEmpty());
+        Assert.IsTrue(selectiveTree.Leaves[3].Data.IsEmpty());
+        Assert.IsTrue(selectiveTree.Leaves[3].Salt.IsEmpty());
+    }
+
+    [TestMethod]
+    public void From_WithEmptyKeysSet_ShouldMakeAllLeavesPrivate()
+    {
+        // Arrange - Create source tree with multiple leaves
+        var sourceTree = new MerkleTree("1.0");
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("email", "john@example.com", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        var preserveKeys = new HashSet<string>(); // Empty set
+
+        // Act - Create selective disclosure tree with no keys to preserve
+        var selectiveTree = MerkleTree.From(sourceTree, preserveKeys);
+
+        // Assert - All leaves should be private
+        Assert.AreEqual(sourceTree.Root, selectiveTree.Root);
+        Assert.AreEqual(sourceTree.Leaves.Count, selectiveTree.Leaves.Count);
+        Assert.IsTrue(selectiveTree.Leaves[0].IsPrivate);
+        Assert.IsTrue(selectiveTree.Leaves[1].IsPrivate);
+    }
+
+    [TestMethod]
+    public void From_WithAllKeysToPreserve_ShouldRevealAllLeaves()
+    {
+        // Arrange - Create source tree with multiple leaves
+        var sourceTree = new MerkleTree("1.0");
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("email", "john@example.com", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        var preserveKeys = new HashSet<string> { "name", "email" };
+
+        // Act - Create selective disclosure tree preserving all keys
+        var selectiveTree = MerkleTree.From(sourceTree, preserveKeys);
+
+        // Assert - All leaves should be revealed
+        Assert.AreEqual(sourceTree.Root, selectiveTree.Root);
+        Assert.AreEqual(sourceTree.Leaves.Count, selectiveTree.Leaves.Count);
+        Assert.IsFalse(selectiveTree.Leaves[0].IsPrivate);
+        Assert.IsFalse(selectiveTree.Leaves[1].IsPrivate);
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(ArgumentNullException))]
+    public void From_WithNullSourceTreeAndKeys_ShouldThrowArgumentNullException()
+    {
+        // Act & Assert
+        MerkleTree.From(
+            null!,
+            new HashSet<string> { "name" }
+        );
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(ArgumentNullException))]
+    public void From_WithNullKeysSet_ShouldThrowArgumentNullException()
+    {
+        // Arrange - Create source tree
+        var sourceTree = new MerkleTree("1.0");
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        // Act & Assert
+        MerkleTree.From(
+            sourceTree,
+            (ISet<string>)null!
+        );
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(NonJsonLeafException))]
+    public void From_WithNonJsonLeaf_ShouldThrowNonJsonLeafException()
+    {
+        // Arrange - Create source tree with a non-JSON leaf
+        var sourceTree = new MerkleTree("1.0");
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddLeaf(new Hex(System.Text.Encoding.UTF8.GetBytes("plain text")), "text/plain; charset=utf-8"); // Non-JSON leaf
+        sourceTree.RecomputeSha256Root();
+
+        var preserveKeys = new HashSet<string> { "name" };
+
+        // Act & Assert - Should throw NonJsonLeafException
+        MerkleTree.From(sourceTree, preserveKeys);
+    }
+
     //
 
     private static string BytesToHexString(byte[] bytes)

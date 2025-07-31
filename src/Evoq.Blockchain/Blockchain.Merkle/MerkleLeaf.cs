@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 
 namespace Evoq.Blockchain.Merkle;
@@ -196,7 +197,7 @@ public class MerkleLeaf
     /// <returns>true if the data was successfully read and deserialized as JSON; otherwise, false.</returns>
     public bool TryReadObject<T>(out T? obj)
     {
-        if (IsUtf8 && TryReadText(out var jsonText))
+        if (this.IsUtf8 && this.TryReadText(out var jsonText))
         {
             try
             {
@@ -216,6 +217,23 @@ public class MerkleLeaf
         }
 
         obj = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to read the data as a JSON object and extract the keys.
+    /// </summary>
+    /// <param name="keys">When this method returns, contains the list of JSON keys if successful; otherwise, an empty list.</param>
+    /// <returns>true if the data was successfully read and deserialized as JSON; otherwise, false.</returns>
+    public bool TryReadJsonKeys(out IReadOnlyList<string> keys)
+    {
+        if (this.TryReadJson(out var jsonObject) && jsonObject != null)
+        {
+            keys = jsonObject.Keys.ToList();
+            return true;
+        }
+
+        keys = new List<string>();
         return false;
     }
 

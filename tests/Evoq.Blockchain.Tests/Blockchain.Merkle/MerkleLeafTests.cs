@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Evoq.Blockchain.Merkle;
 
@@ -443,6 +444,123 @@ public class MerkleLeafTests
         Assert.AreEqual(5, numbers!.Length);
         Assert.AreEqual(1, numbers[0]);
         Assert.AreEqual(5, numbers[4]);
+    }
+
+    [TestMethod]
+    public void TryReadJsonKeys_WithValidJsonContent_ShouldReturnTrueAndKeys()
+    {
+        // Arrange
+        var jsonText = "{\"name\":\"John Doe\",\"age\":30,\"active\":true}";
+        var data = new Hex(Encoding.UTF8.GetBytes(jsonText));
+        var leaf = new MerkleLeaf("application/json; charset=utf-8", data, Hex.Empty, Hex.Empty);
+
+        // Act
+        var result = leaf.TryReadJsonKeys(out var keys);
+
+        // Assert
+        Assert.IsTrue(result);
+        Assert.IsNotNull(keys);
+        Assert.AreEqual(3, keys.Count);
+        CollectionAssert.Contains(keys.ToList(), "name");
+        CollectionAssert.Contains(keys.ToList(), "age");
+        CollectionAssert.Contains(keys.ToList(), "active");
+    }
+
+    [TestMethod]
+    public void TryReadJsonKeys_WithJsonFromFromJsonValue_ShouldReturnTrueAndKeys()
+    {
+        // Arrange
+        var leaf = MerkleLeaf.FromJsonValue("name", "John Doe");
+
+        // Act
+        var result = leaf.TryReadJsonKeys(out var keys);
+
+        // Assert
+        Assert.IsTrue(result);
+        Assert.IsNotNull(keys);
+        Assert.AreEqual(1, keys.Count);
+        CollectionAssert.Contains(keys.ToList(), "name");
+    }
+
+    [TestMethod]
+    public void TryReadJsonKeys_WithInvalidJsonContent_ShouldReturnFalse()
+    {
+        // Arrange
+        var invalidJson = "{\"name\":\"John Doe\",\"age\":30,"; // Missing closing brace
+        var data = new Hex(Encoding.UTF8.GetBytes(invalidJson));
+        var leaf = new MerkleLeaf("application/json; charset=utf-8", data, Hex.Empty, Hex.Empty);
+
+        // Act
+        var result = leaf.TryReadJsonKeys(out var keys);
+
+        // Assert
+        Assert.IsFalse(result);
+        Assert.IsNotNull(keys);
+        Assert.AreEqual(0, keys.Count);
+    }
+
+    [TestMethod]
+    public void TryReadJsonKeys_WithNonUtf8Content_ShouldReturnFalse()
+    {
+        // Arrange
+        var data = new Hex(new byte[] { 0xFF, 0xFE, 0xFD });
+        var leaf = new MerkleLeaf("application/octet-stream", data, Hex.Empty, Hex.Empty);
+
+        // Act
+        var result = leaf.TryReadJsonKeys(out var keys);
+
+        // Assert
+        Assert.IsFalse(result);
+        Assert.IsNotNull(keys);
+        Assert.AreEqual(0, keys.Count);
+    }
+
+    [TestMethod]
+    public void TryReadJsonKeys_WithEmptyData_ShouldReturnFalse()
+    {
+        // Arrange
+        var leaf = new MerkleLeaf("application/json; charset=utf-8", Hex.Empty, Hex.Empty, Hex.Empty);
+
+        // Act
+        var result = leaf.TryReadJsonKeys(out var keys);
+
+        // Assert
+        Assert.IsFalse(result);
+        Assert.IsNotNull(keys);
+        Assert.AreEqual(0, keys.Count);
+    }
+
+    [TestMethod]
+    public void TryReadJsonKeys_WithPrivateLeaf_ShouldReturnFalse()
+    {
+        // Arrange
+        var hash = new Hex(new byte[] { 1, 2, 3, 4 });
+        var leaf = new MerkleLeaf(hash);
+
+        // Act
+        var result = leaf.TryReadJsonKeys(out var keys);
+
+        // Assert
+        Assert.IsFalse(result);
+        Assert.IsNotNull(keys);
+        Assert.AreEqual(0, keys.Count);
+    }
+
+    [TestMethod]
+    public void TryReadJsonKeys_WithEmptyJsonObject_ShouldReturnTrueAndEmptyKeys()
+    {
+        // Arrange
+        var jsonText = "{}";
+        var data = new Hex(Encoding.UTF8.GetBytes(jsonText));
+        var leaf = new MerkleLeaf("application/json; charset=utf-8", data, Hex.Empty, Hex.Empty);
+
+        // Act
+        var result = leaf.TryReadJsonKeys(out var keys);
+
+        // Assert
+        Assert.IsTrue(result);
+        Assert.IsNotNull(keys);
+        Assert.AreEqual(0, keys.Count);
     }
 
     // Test class for TryReadObject tests
