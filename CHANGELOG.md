@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2024-12-19
+
+### Added
+- **Selective Disclosure Factory Methods**: New `From` static methods for creating selective disclosure trees
+  - `From(sourceTree, makePrivate)` - Create tree with custom predicate for privacy decisions
+  - `From(sourceTree, preserveKeys)` - Convenience method using key names to preserve
+- **JSON Key Extraction**: New `TryReadJsonKeys` method on `MerkleLeaf` for extracting keys from JSON data
+- **Custom Exception**: `NonJsonLeafException` for handling non-JSON leaves in selective disclosure
+- **Comprehensive Test Coverage**: Full test suite for all selective disclosure functionality
+
+### Technical Details
+- Factory methods create new tree instances with mixed public/private leaves
+- Maintains cryptographic integrity with same root hash as source tree
+- Supports both predicate-based and key-based selective disclosure
+- Handles empty trees and edge cases gracefully
+- Throws descriptive exceptions for invalid operations
+
+### Usage Examples
+```csharp
+// Create selective disclosure tree with predicate
+var selectiveTree = MerkleTree.From(sourceTree, leaf => 
+    leaf.TryReadJsonKeys(out var keys) && keys.Contains("ssn"));
+
+// Create selective disclosure tree with key names
+var preserveKeys = new HashSet<string> { "name", "email" };
+var selectiveTree = MerkleTree.From(sourceTree, preserveKeys);
+```
+
 ## [1.5.0] - 2024-03-19
 
 ### Added
