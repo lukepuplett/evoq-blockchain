@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2024-12-19
+
+### Added
+- **Selective Disclosure with V3.0 Metadata Preservation**: Enhanced `From` methods now properly preserve V3.0 header leaf during selective disclosure
+- **Flexible Metadata Detection**: New `IsMetadata` property on `MerkleLeaf` for flexible header detection
+- **Content Type Constants**: Added `V3_0_HEADER_CONTENT_TYPE` and `V3_0_HEADER_MIME_TYPE` constants to eliminate magic strings
+- **Root Hash Consistency**: Ensures root hash remains identical between source and selective disclosure trees
+
+### Fixed
+- **V3.0 Header Leaf Preservation**: Fixed issue where V3.0 metadata leaf salt was being regenerated during selective disclosure
+- **Cryptographic Integrity**: Selective disclosure trees now maintain exact same root hash as source tree
+- **Metadata Leaf Detection**: Improved header leaf detection to work with any version containing 'merkle-exchange-header'
+
+### Changed
+- **Enhanced Test Coverage**: Added comprehensive tests for V3.0 selective disclosure scenarios
+- **Improved Error Handling**: Better validation for empty trees without root
+- **Code Organization**: Moved content type constants to appropriate utility class
+
+### Technical Details
+- V3.0 header leaf is now preserved exactly as-is during selective disclosure
+- Root hash computation uses preserved header leaf instead of recreating it
+- Flexible metadata detection supports future version formats
+- Comprehensive test coverage ensures reliability across all scenarios
+
 ## [1.7.0] - 2024-12-19
 
 ### Added
