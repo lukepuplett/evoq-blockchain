@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -57,6 +58,11 @@ public class MerkleLeaf
     /// but hash is available for verification).
     /// </summary>
     public bool IsPrivate => this.Data.IsEmpty() && this.Salt.IsEmpty() && !this.Hash.IsEmpty();
+
+    /// <summary>
+    /// Gets a value indicating whether this leaf is a metadata header leaf.
+    /// </summary>
+    public bool IsMetadata => ContentType.Contains("merkle-exchange-header", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets or sets the data contained in the leaf.

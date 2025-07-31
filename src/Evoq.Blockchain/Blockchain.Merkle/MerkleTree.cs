@@ -474,43 +474,34 @@ public class MerkleTree
             throw new ArgumentNullException(nameof(makePrivate));
         }
 
+        if (sourceTree.Root.IsEmpty())
+        {
+            throw new InvalidOperationException("Unable to create selective disclosure version of a tree with no root");
+        }
+
         var newLeaves = new List<MerkleLeaf>();
 
         foreach (var leaf in sourceTree.Leaves)
         {
-            // Determine if this leaf should be private
             bool shouldBePrivate = makePrivate(leaf);
 
-            if (shouldBePrivate)
-            {
-                // Create a private leaf with just the hash
-                newLeaves.Add(new MerkleLeaf(leaf.Hash));
-            }
-            else
+            if (!shouldBePrivate || leaf.IsMetadata)
             {
                 // Create a new leaf with full data (copy the original)
                 newLeaves.Add(new MerkleLeaf(leaf.ContentType, leaf.Data, leaf.Salt, leaf.Hash));
             }
+            else
+            {
+                // Create a private leaf with just the hash
+                newLeaves.Add(new MerkleLeaf(leaf.Hash));
+            }
         }
 
-        // Create new tree with the same version and metadata
         var newTree = new MerkleTree(sourceTree.Metadata.Version, newLeaves.ToArray());
 
-        // Copy metadata
         newTree.Metadata.HashAlgorithm = sourceTree.Metadata.HashAlgorithm;
         newTree.Metadata.ExchangeDocumentType = sourceTree.Metadata.ExchangeDocumentType;
-
-        // Handle empty trees by setting root to Hex.Empty, otherwise recompute
-        if (newLeaves.Count == 0)
-        {
-            newTree.Root = Hex.Empty;
-        }
-        else
-        {
-            // Recompute the root using the same hash function as the source tree
-            var hashFunction = GetHashFunctionFromMetadata(newTree.Metadata.HashAlgorithm);
-            newTree.RecomputeRoot(hashFunction, newTree.Metadata.HashAlgorithm);
-        }
+        newTree.Root = newTree.ComputeRootFromLeafHashes(GetHashFunctionFromMetadata(newTree.Metadata.HashAlgorithm), false);
 
         return newTree;
     }
@@ -580,9 +571,7 @@ public class MerkleTree
             // The first time we compute the root, we need to add a header leaf to
             // the tree, if it is not already present.
 
-            var headerLeafMimeType = "application/merkle-exchange-header-3.0+json";
-            var headerLeafContentType = $"{headerLeafMimeType}; charset=utf-8; encoding=hex";
-            var hasHeaderLeaf = this.Leaves.First().ContentType == headerLeafContentType;
+            var hasHeaderLeaf = this.Leaves.First().IsMetadata;
 
             if (forceNewHeader && hasHeaderLeaf)
             {
@@ -596,14 +585,14 @@ public class MerkleTree
                 MerkleTreeV3LeafHeaderDto header = new()
                 {
                     Alg = this.Metadata.HashAlgorithm, // assumes Metadata is configured before calling this method
-                    Typ = headerLeafMimeType,
+                    Typ = ContentTypeUtility.V3_0_HEADER_MIME_TYPE,
                     Leaves = this.Leaves.Count + 1,
                     Exchange = this.Metadata.ExchangeDocumentType ?? "unspecified",
                 };
 
                 var headerJson = JsonSerializer.Serialize(header);
                 var headerHex = new Hex(System.Text.Encoding.UTF8.GetBytes(headerJson));
-                var headerLeaf = MerkleLeaf.FromData(headerLeafContentType, headerHex);
+                var headerLeaf = MerkleLeaf.FromData(ContentTypeUtility.V3_0_HEADER_CONTENT_TYPE, headerHex);
 
                 leaves.Add(headerLeaf);
                 leaves.AddRange(this.Leaves);

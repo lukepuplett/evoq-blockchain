@@ -182,4 +182,14 @@ public static class ContentTypeUtility
 
         return IsJson(contentType) && IsUtf8(contentType) && IsHex(contentType);
     }
+
+    /// <summary>
+    /// The content type for the V3.0 header leaf.
+    /// </summary>
+    public const string V3_0_HEADER_CONTENT_TYPE = "application/merkle-exchange-header-3.0+json; charset=utf-8; encoding=hex";
+
+    /// <summary>
+    /// The MIME type for the V3.0 header leaf (without charset and encoding).
+    /// </summary>
+    public const string V3_0_HEADER_MIME_TYPE = "application/merkle-exchange-header-3.0+json";
 }

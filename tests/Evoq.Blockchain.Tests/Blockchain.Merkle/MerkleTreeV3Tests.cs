@@ -1157,4 +1157,82 @@ public class MerkleV3TreeTests
             !string.IsNullOrEmpty(exchange.GetString()),
             "Header should have non-empty 'exchange' property");
     }
+
+    [TestMethod]
+    public void From_WithV3Tree_ShouldPreserveMetadataLeaf()
+    {
+        // Arrange - Create V3 tree with header leaf and data leaves
+        var sourceTree = new MerkleTree(MerkleTreeVersionStrings.V3_0);
+        sourceTree.Metadata.ExchangeDocumentType = "test-exchange";
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("ssn", "123-45-6789", Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("email", "john@example.com", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        // Act - Create selective disclosure tree with predicate that would make all leaves private
+        var selectiveTree = MerkleTree.From(
+            sourceTree,
+            makePrivate: leaf => true // This would make all leaves private, but metadata should be preserved
+        );
+
+        // Assert - Metadata leaf should be preserved with full data
+        Assert.AreEqual(sourceTree.Leaves.Count, selectiveTree.Leaves.Count, "Should have same number of leaves");
+
+        // First leaf should be the metadata leaf and should be preserved
+        var metadataLeaf = selectiveTree.Leaves[0];
+        Assert.IsTrue(metadataLeaf.IsMetadata, "First leaf should be a metadata leaf");
+        Assert.IsFalse(metadataLeaf.IsPrivate, "Metadata leaf should not be private");
+        Assert.IsFalse(metadataLeaf.Data.IsEmpty(), "Metadata leaf should have data");
+        Assert.IsFalse(metadataLeaf.Salt.IsEmpty(), "Metadata leaf should have salt");
+
+        // Metadata leaf should be preserved exactly as-is (same salt, data, hash)
+        var sourceMetadataLeaf = sourceTree.Leaves[0];
+        Assert.AreEqual(sourceMetadataLeaf.ContentType, metadataLeaf.ContentType, "Metadata content type should be preserved");
+        Assert.AreEqual(sourceMetadataLeaf.Data, metadataLeaf.Data, "Metadata data should be preserved");
+        Assert.AreEqual(sourceMetadataLeaf.Salt, metadataLeaf.Salt, "Metadata salt should be preserved");
+        Assert.AreEqual(sourceMetadataLeaf.Hash, metadataLeaf.Hash, "Metadata hash should be preserved");
+
+        // All other leaves should be private
+        for (int i = 1; i < selectiveTree.Leaves.Count; i++)
+        {
+            Assert.IsTrue(selectiveTree.Leaves[i].IsPrivate, $"Leaf {i} should be private");
+            Assert.IsTrue(selectiveTree.Leaves[i].Data.IsEmpty(), $"Leaf {i} should have no data");
+            Assert.IsTrue(selectiveTree.Leaves[i].Salt.IsEmpty(), $"Leaf {i} should have no salt");
+            Assert.AreEqual(sourceTree.Leaves[i].Hash, selectiveTree.Leaves[i].Hash, $"Leaf {i} hash should be preserved");
+        }
+
+        // Root should be the same
+        Assert.AreEqual(sourceTree.Root, selectiveTree.Root, "Root hash should be preserved");
+    }
+
+    [TestMethod]
+    public void From_WithV3Tree_ShouldMaintainSameRootHash()
+    {
+        // Arrange - Create V3 tree with header leaf and data leaves
+        var sourceTree = new MerkleTree(MerkleTreeVersionStrings.V3_0);
+        sourceTree.Metadata.ExchangeDocumentType = "test-exchange";
+        sourceTree.AddJsonLeaf("name", "John Doe", Hex.Parse("0xaabbcc"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("ssn", "123-45-6789", Hex.Parse("0xddeeff"), MerkleTree.ComputeSha256Hash);
+        sourceTree.AddJsonLeaf("email", "john@example.com", Hex.Parse("0x112233"), MerkleTree.ComputeSha256Hash);
+        sourceTree.RecomputeSha256Root();
+
+        var originalRoot = sourceTree.Root;
+        Assert.IsFalse(originalRoot.IsEmpty(), "Source tree should have a computed root");
+
+        // Act - Create selective disclosure tree with various predicates
+        var allPrivateTree = MerkleTree.From(sourceTree, makePrivate: leaf => true);
+        var allRevealedTree = MerkleTree.From(sourceTree, makePrivate: leaf => false);
+        var selectiveTree = MerkleTree.From(sourceTree, makePrivate: leaf =>
+            leaf.TryReadJsonKeys(out var keys) && keys.Contains("ssn"));
+
+        // Assert - All selective disclosure trees should have the same root hash as the source
+        Assert.AreEqual(originalRoot, allPrivateTree.Root, "All-private tree should have same root");
+        Assert.AreEqual(originalRoot, allRevealedTree.Root, "All-revealed tree should have same root");
+        Assert.AreEqual(originalRoot, selectiveTree.Root, "Selective tree should have same root");
+
+        // Verify the trees are different in terms of privacy but same in structure
+        Assert.AreEqual(sourceTree.Leaves.Count, allPrivateTree.Leaves.Count);
+        Assert.AreEqual(sourceTree.Leaves.Count, allRevealedTree.Leaves.Count);
+        Assert.AreEqual(sourceTree.Leaves.Count, selectiveTree.Leaves.Count);
+    }
 }
