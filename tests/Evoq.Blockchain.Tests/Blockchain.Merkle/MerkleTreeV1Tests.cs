@@ -834,23 +834,18 @@ public class MerkleV1TreeTests
     }
 
     [TestMethod]
-    public void From_WithEmptyTree_ShouldCreateEmptyTree()
+    [ExpectedException(typeof(InvalidOperationException))]
+    public void From_WithEmptyTree_ShouldThrowInvalidOperationException()
     {
-        // Arrange - Create empty source tree
+        // Arrange - Create empty tree without root
         var sourceTree = new MerkleTree("1.0");
         // Note: We don't call RecomputeSha256Root() on empty trees as it throws an exception
 
-        // Act - Create selective disclosure tree
-        var selectiveTree = MerkleTree.From(
+        // Act & Assert - Should throw because empty trees without root are not valid for selective disclosure
+        MerkleTree.From(
             sourceTree,
             makePrivate: leaf => true
         );
-
-        // Assert - Should be empty tree with same metadata
-        Assert.AreEqual(sourceTree.Root, selectiveTree.Root);
-        Assert.AreEqual(sourceTree.Metadata.Version, selectiveTree.Metadata.Version);
-        Assert.AreEqual(sourceTree.Metadata.HashAlgorithm, selectiveTree.Metadata.HashAlgorithm);
-        Assert.AreEqual(0, selectiveTree.Leaves.Count);
     }
 
     [TestMethod]
