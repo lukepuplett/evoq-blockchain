@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2024-12-19
+
+### Added
+- **Native JSON Serialization Support**: Added automatic JSON serialization/deserialization for `Hex` type
+- **HexJsonConverter**: System.Text.Json converter for seamless `Hex` property handling in DTOs
+- **NullableHexJsonConverter**: Support for nullable `Hex?` properties in JSON serialization
+- **JsonSerializerOptionsExtensions**: Easy configuration with `ConfigureForHex()` extension method
+- **Comprehensive Test Coverage**: 36 new tests covering all serialization scenarios and edge cases
+
+### Changed
+- **Storage DTOs Enhancement**: Consumers can now use `Hex` properties directly in storage DTOs without manual conversion
+- **Developer Experience**: Simplified JSON API development with automatic hex string handling
+
+### Technical Details
+- Hex values serialize to/from hex strings (e.g., "0x1234abcd") in JSON automatically
+- Supports both direct `Hex` properties and nullable `Hex?` properties
+- Provides clear error messages for invalid hex strings during deserialization
+- Maintains backward compatibility - no breaking changes to existing APIs
+- Easy setup: single `ConfigureForHex()` call enables all functionality
+
+### Usage Examples
+```csharp
+// Configure JSON options (one-time setup)
+var options = new JsonSerializerOptions().ConfigureForHex();
+
+// Use Hex properties naturally in DTOs
+public class TransactionDto 
+{
+    public Hex Hash { get; set; }
+    public Hex From { get; set; }
+    public Hex? BlockHash { get; set; } // Nullable support
+}
+
+// Serialization/deserialization works automatically
+var dto = new TransactionDto { Hash = "0x1234abcd" }; // String assignment
+string json = JsonSerializer.Serialize(dto, options);   // Automatic
+var result = JsonSerializer.Deserialize<TransactionDto>(json, options); // Automatic
+```
+
 ## [1.8.0] - 2024-12-19
 
 ### Added
