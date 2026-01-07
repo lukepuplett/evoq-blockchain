@@ -1,5 +1,13 @@
 name: Publish NuGet Package
 
+# NOTE: Currently using manual upload process to NuGet.org
+# The package is manually uploaded by Luke Puplett (pup-lett) by logging into nuget.org
+# and uploading the .nupkg file from the artifacts directory at:
+# https://www.nuget.org/packages/manage/upload
+# 
+# This workflow is kept for future automation, but the publish step will fail
+# until NUGET_API_KEY secret is configured in GitHub repository settings.
+
 on:
   push:
     tags:
@@ -29,5 +37,7 @@ jobs:
     - name: Pack
       run: dotnet pack --configuration Release --no-build --output ./artifacts
     
+    # NOTE: This step is currently disabled - using manual upload instead
+    # To enable: Add NUGET_API_KEY secret in GitHub repository settings
     - name: Publish to NuGet
       run: dotnet nuget push "./artifacts/*.nupkg" --api-key ${{secrets.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json
