@@ -198,6 +198,139 @@ public class MerkleTree
     }
 
     /// <summary>
+    /// Reconstructs an object from the Merkle tree leaves.
+    /// This is the inverse operation of AddObjectLeaves&lt;T&gt;().
+    /// </summary>
+    /// <typeparam name="T">The type of object to reconstruct.</typeparam>
+    /// <param name="validateRoot">If true, verifies the tree's root hash before reconstruction. Default is false.</param>
+    /// <returns>The reconstructed object of type T.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the tree has no leaves or no data leaves.</exception>
+    /// <exception cref="InvalidRootException">Thrown when validateRoot is true and root verification fails.</exception>
+    /// <exception cref="JsonException">Thrown when leaf data cannot be parsed as JSON.</exception>
+    /// <exception cref="MissingLeafDataException">Thrown when required properties are missing due to private leaves.</exception>
+    /// <remarks>
+    /// This method skips header leaves (V3.0) and private leaves automatically.
+    /// If you need all properties to reconstruct the object, ensure no required leaves are private.
+    /// 
+    /// Example:
+    /// <code>
+    /// var original = new { name = "John", age = 30 };
+    /// merkleTree.AddObjectLeaves(original);
+    /// merkleTree.RecomputeSha256Root();
+    /// 
+    /// var reconstructed = merkleTree.GetObjectFromLeaves&lt;Dictionary&lt;string, object&gt;&gt;();
+    /// </code>
+    /// </remarks>
+    public T GetObjectFromLeaves<T>(bool validateRoot = false)
+    {
+        if (this.Leaves.Count == 0)
+            throw new InvalidOperationException("Cannot reconstruct object from empty MerkleTree");
+
+        // Optionally validate the root first
+        if (validateRoot && !this.Root.IsEmpty())
+        {
+            var hashFunction = GetHashFunctionFromMetadata(this.Metadata.HashAlgorithm);
+            if (!this.VerifyRoot(hashFunction))
+            {
+                throw new InvalidRootException(
+                    "Cannot reconstruct object from MerkleTree with invalid root. " +
+                    "The root hash does not match the computed hash from leaves.");
+            }
+        }
+
+        var reconstructedData = new Dictionary<string, object?>();
+        var processedLeafCount = 0;
+
+        foreach (var leaf in this.Leaves)
+        {
+            // Skip header leaves (V3.0 metadata leaf)
+            if (leaf.IsMetadata)
+                continue;
+
+            // Skip private leaves (no data available)
+            if (leaf.IsPrivate || leaf.Data.IsEmpty())
+                continue;
+
+            // Decode hex data to UTF-8 JSON string
+            var decodedJson = System.Text.Encoding.UTF8.GetString(leaf.Data.ToByteArray());
+
+            try
+            {
+                // Parse the leaf's JSON content
+                using var leafDoc = JsonDocument.Parse(decodedJson);
+
+                // Each leaf contains properties - add them to the dictionary
+                foreach (var property in leafDoc.RootElement.EnumerateObject())
+                {
+                    reconstructedData[property.Name] = ConvertJsonValue(property.Value);
+                    processedLeafCount++;
+                }
+            }
+            catch (JsonException ex)
+            {
+                throw new JsonException($"Failed to parse leaf data as JSON: {decodedJson}", ex);
+            }
+        }
+
+        if (processedLeafCount == 0)
+        {
+            throw new InvalidOperationException(
+                "MerkleTree has no data leaves. All leaves are either header leaves or private leaves.");
+        }
+
+        // Convert dictionary to JSON and deserialize to T
+        var reconstructedJson = JsonSerializer.Serialize(reconstructedData);
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<T>(reconstructedJson);
+
+            if (result == null)
+            {
+                throw new InvalidOperationException(
+                    $"Deserialization resulted in null. The leaf data may not be compatible with type {typeof(T).Name}");
+            }
+
+            // If T is Dictionary<string, object>, we need to convert JsonElement values to proper types
+            // because System.Text.Json deserializes nested objects as JsonElement by default
+            if (result is Dictionary<string, object> dict)
+            {
+                var dictWithNullables = new Dictionary<string, object?>();
+                foreach (var kvp in dict)
+                {
+                    dictWithNullables[kvp.Key] = kvp.Value;
+                }
+                ConvertJsonElementsInDictionary(dictWithNullables);
+                // Convert back to non-nullable dictionary for return
+                var convertedDict = new Dictionary<string, object>();
+                foreach (var kvp in dictWithNullables)
+                {
+                    convertedDict[kvp.Key] = kvp.Value!;
+                }
+                return (T)(object)convertedDict;
+            }
+
+            // Validate that required properties are not missing (check for null/empty non-nullable strings)
+            // This helps detect when required properties are in private leaves
+            ValidateRequiredProperties(result, reconstructedData);
+
+            return result;
+        }
+        catch (JsonException ex)
+        {
+            // This could indicate missing required properties (private leaves)
+            throw new MissingLeafDataException(
+                $"Failed to deserialize reconstructed data to type {typeof(T).Name}. " +
+                "This may indicate required properties are in private leaves.", ex);
+        }
+        catch (MissingLeafDataException)
+        {
+            // Re-throw MissingLeafDataException as-is
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Adds a new leaf to the Merkle tree.
     /// </summary>
     /// <param name="fieldName">The name of the field to store in the leaf.</param>
@@ -643,6 +776,133 @@ public class MerkleTree
             list.Add(ConvertJsonValue(item));
         }
         return list.ToArray();
+    }
+
+    /// <summary>
+    /// Recursively converts JsonElement values in a dictionary to proper C# types.
+    /// This is needed because System.Text.Json deserializes nested objects as JsonElement by default.
+    /// </summary>
+    private static void ConvertJsonElementsInDictionary(Dictionary<string, object?> dictionary)
+    {
+        var keysToUpdate = new List<string>();
+        var valuesToUpdate = new Dictionary<string, object?>();
+
+        foreach (var kvp in dictionary)
+        {
+            if (kvp.Value is JsonElement jsonElement)
+            {
+                valuesToUpdate[kvp.Key] = ConvertJsonElementToProperType(jsonElement);
+            }
+            else if (kvp.Value is Dictionary<string, object?> nestedDict)
+            {
+                // Recursively convert nested dictionaries
+                ConvertJsonElementsInDictionary(nestedDict);
+            }
+            else if (kvp.Value is object[] array)
+            {
+                // Convert JsonElement values in arrays
+                var convertedArray = new object?[array.Length];
+                for (int i = 0; i < array.Length; i++)
+                {
+                    if (array[i] is JsonElement elem)
+                    {
+                        convertedArray[i] = ConvertJsonElementToProperType(elem);
+                    }
+                    else if (array[i] is Dictionary<string, object?> nestedDictInArray)
+                    {
+                        ConvertJsonElementsInDictionary(nestedDictInArray);
+                        convertedArray[i] = nestedDictInArray;
+                    }
+                    else
+                    {
+                        convertedArray[i] = array[i];
+                    }
+                }
+                valuesToUpdate[kvp.Key] = convertedArray;
+            }
+        }
+
+        // Apply all updates
+        foreach (var kvp in valuesToUpdate)
+        {
+            dictionary[kvp.Key] = kvp.Value;
+        }
+    }
+
+    /// <summary>
+    /// Converts a JsonElement to a proper C# type (string, long, double, bool, null, Dictionary, or object[]).
+    /// </summary>
+    private static object? ConvertJsonElementToProperType(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.TryGetInt64(out var longValue)
+                ? (object)longValue
+                : element.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Null => null,
+            JsonValueKind.Object => ConvertJsonElementToDictionary(element),
+            JsonValueKind.Array => ConvertJsonArray(element),
+            _ => element.ToString()
+        };
+    }
+
+    /// <summary>
+    /// Validates that required properties are not missing from the reconstructed object.
+    /// Checks if nullable reference type properties are null and not present in reconstructed data,
+    /// which indicates the property was in a private leaf.
+    /// 
+    /// Note: Empty strings are treated as legitimate values and will not trigger validation errors.
+    /// Only null values are checked to detect missing properties.
+    /// </summary>
+    private static void ValidateRequiredProperties<T>(T result, Dictionary<string, object?> reconstructedData)
+    {
+        // Only validate for non-dictionary types (dictionaries don't have required properties)
+        if (result is Dictionary<string, object>)
+            return;
+
+        var type = typeof(T);
+        var properties = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+        foreach (var property in properties)
+        {
+            // Check if this property can be null:
+            // 1. Reference types (string, string?, MyClass, MyClass?) - IsValueType is false
+            // 2. Nullable value types (int?, bool?) - Nullable.GetUnderlyingType returns non-null
+            var isNullable = !property.PropertyType.IsValueType || Nullable.GetUnderlyingType(property.PropertyType) != null;
+
+            if (isNullable)
+            {
+                var value = property.GetValue(result);
+
+                // Only check for null - empty strings and other "default" values are legitimate
+                if (value == null)
+                {
+                    // Check if this property name (case-insensitive) exists in reconstructedData
+                    // Also check common naming variations (PascalCase vs camelCase)
+                    var propertyNameVariations = new[]
+                    {
+                        property.Name,
+                        char.ToLowerInvariant(property.Name[0]) + property.Name.Substring(1), // camelCase
+                        property.Name.ToLowerInvariant()
+                    };
+
+                    var foundInData = reconstructedData.Keys.Any(k =>
+                        propertyNameVariations.Any(variant =>
+                            k.Equals(variant, StringComparison.OrdinalIgnoreCase)));
+
+                    // If not found in data, it was likely in a private leaf
+                    if (!foundInData)
+                    {
+                        throw new MissingLeafDataException(
+                            $"Required property '{property.Name}' is missing. " +
+                            "This may indicate the property is in a private leaf.");
+                    }
+                }
+            }
+        }
     }
 
     private Hex ComputeRootFromLeafHashes(HashFunction hashFunction, bool forceNewHeader)
