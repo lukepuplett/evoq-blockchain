@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-01-07
+
+### Added
+- **Object Serialization to Merkle Trees**: New `AddObjectLeaves<T>()` method to serialize any object directly to Merkle tree leaves
+- **Object Reconstruction from Merkle Trees**: New `GetObjectFromLeaves<T>()` method to reconstruct objects from Merkle tree leaves (inverse operation)
+- **MissingLeafDataException**: New exception type for handling missing required properties during object reconstruction
+- **Comprehensive Test Coverage**: Over 1,000 lines of new tests covering object serialization/deserialization scenarios
+  - Simple objects, nested objects, arrays, and mixed types
+  - V2.0 and V3.0 format support
+  - V3.0 header leaf handling and metadata preservation
+  - Private leaves and selective disclosure scenarios
+  - Root validation and empty string vs null distinction
+
+### Technical Details
+- `AddObjectLeaves<T>()` automatically serializes objects to JSON and creates individual leaves for each property
+- `GetObjectFromLeaves<T>()` reconstructs objects by combining leaf data, automatically skipping header leaves and private leaves
+- Proper null validation: empty strings are treated as legitimate values, only nullable types are validated for missing properties
+- Full support for V3.0 format with automatic header leaf handling
+- Works seamlessly with selective disclosure - private leaves are automatically skipped during reconstruction
+
+### Usage Examples
+```csharp
+// Serialize an object to Merkle tree leaves
+var invoice = new { 
+    invoiceNumber = "INV-001", 
+    amount = 1000.00,
+    customer = new { name = "John", email = "john@example.com" }
+};
+merkleTree.AddObjectLeaves(invoice);
+merkleTree.RecomputeSha256Root();
+
+// Reconstruct the object from leaves
+var reconstructed = merkleTree.GetObjectFromLeaves<Dictionary<string, object>>();
+
+// Works with selective disclosure - private leaves are automatically skipped
+var selectiveTree = MerkleTree.From(merkleTree, leaf => 
+    leaf.TryReadJsonKeys(out var keys) && keys.Contains("customer"));
+var partial = selectiveTree.GetObjectFromLeaves<Dictionary<string, object>>();
+```
+
 ## [1.9.0] - 2024-12-19
 
 ### Added
