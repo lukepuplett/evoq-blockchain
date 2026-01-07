@@ -152,6 +152,52 @@ public class MerkleTree
     }
 
     /// <summary>
+    /// Adds leaves to the Merkle tree from a complex object.
+    /// Serializes the object to JSON, converts it to a dictionary, and calls AddJsonLeaves.
+    /// Each root-level property of the object becomes a separate leaf in the tree.
+    /// </summary>
+    /// <typeparam name="T">The type of object to add.</typeparam>
+    /// <param name="obj">The object to add as leaves.</param>
+    /// <param name="options">Optional JSON serializer options. If null, uses default options.</param>
+    /// <exception cref="ArgumentNullException">Thrown when obj is null.</exception>
+    /// <remarks>
+    /// This method handles complex nested objects and arrays by serializing them to JSON
+    /// and converting the JSON structure to a dictionary format suitable for AddJsonLeaves.
+    /// 
+    /// Example:
+    /// <code>
+    /// var invoice = new { 
+    ///     invoiceNumber = "INV-001", 
+    ///     amount = 1000.00,
+    ///     customer = new { name = "John", email = "john@example.com" }
+    /// };
+    /// merkleTree.AddObjectLeaves(invoice);
+    /// </code>
+    /// 
+    /// This will create 3 leaves:
+    /// - { "invoiceNumber": "INV-001" }
+    /// - { "amount": 1000.00 }
+    /// - { "customer": { "name": "John", "email": "john@example.com" } }
+    /// </remarks>
+    public void AddObjectLeaves<T>(T obj, JsonSerializerOptions? options = null)
+    {
+        if (obj == null)
+            throw new ArgumentNullException(nameof(obj));
+
+        // 1. Serialize the object to JSON
+        var json = JsonSerializer.Serialize(obj, options);
+
+        // 2. Parse the JSON into a JsonDocument (dispose properly)
+        using var jsonDocument = JsonDocument.Parse(json);
+
+        // 3. Convert the JsonDocument.RootElement to Dictionary<string, object?> recursively
+        var dictionary = ConvertJsonElementToDictionary(jsonDocument.RootElement);
+
+        // 4. Call AddJsonLeaves(dictionary)
+        this.AddJsonLeaves(dictionary);
+    }
+
+    /// <summary>
     /// Adds a new leaf to the Merkle tree.
     /// </summary>
     /// <param name="fieldName">The name of the field to store in the leaf.</param>
@@ -553,6 +599,50 @@ public class MerkleTree
                 $"Hash algorithm '{hashAlgorithmName}' specified in metadata is not supported. " +
                 "To use a custom hash algorithm, call VerifyRoot(HashFunction) directly with your implementation.")
         };
+    }
+
+    private static Dictionary<string, object?> ConvertJsonElementToDictionary(JsonElement element)
+    {
+        var dictionary = new Dictionary<string, object?>();
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            throw new ArgumentException("Root element must be a JSON object", nameof(element));
+        }
+
+        foreach (var property in element.EnumerateObject())
+        {
+            dictionary[property.Name] = ConvertJsonValue(property.Value);
+        }
+
+        return dictionary;
+    }
+
+    private static object? ConvertJsonValue(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.TryGetInt64(out var longValue)
+                ? (object)longValue
+                : element.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Null => null,
+            JsonValueKind.Object => ConvertJsonElementToDictionary(element),
+            JsonValueKind.Array => ConvertJsonArray(element),
+            _ => element.ToString()
+        };
+    }
+
+    private static object? ConvertJsonArray(JsonElement arrayElement)
+    {
+        var list = new List<object?>();
+        foreach (var item in arrayElement.EnumerateArray())
+        {
+            list.Add(ConvertJsonValue(item));
+        }
+        return list.ToArray();
     }
 
     private Hex ComputeRootFromLeafHashes(HashFunction hashFunction, bool forceNewHeader)
